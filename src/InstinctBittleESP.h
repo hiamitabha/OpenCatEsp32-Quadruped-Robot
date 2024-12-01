@@ -2158,14 +2158,22 @@ const int8_t zz[] PROGMEM = {
  0, 0, 0, 
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,	 4, 0, 0, 0,
 };
-  const char* skillNameWithType[]={"bdFI","bkI","bkArmFI","bkArmLFI","bkFI","bkLI","crArmFI","crArmLI","crFI","crLI","gpFI","gpLI","hlwI","jpFI","lftFI","lftLI","phFI","phLI","trArmFI","trArmLI","trFI","trLI","vtArmFI","vtFI","vtLI","wkArmFI","wkArmLI","wkFI","wkLI","balanceI","buttUpI","calibI","droppedI","liftedI","lndI","restI","sitI","strI","upI","zeroN","angI","bfI","bxI","chrI","ckI","clappingI","cmhI","dgI","dropI","ffI","fivI","gdbI","hdsI","hgI","hiI","hskI","huI","huntI","jmpI","kcI","knockI","lpovI","mwI","ndI","pdI","peeI","pickI","puI","pu1I","putAwayI","rcI","rlI","scrhI","shootI","showOffI","snfI","tblI","throI","tsI","whI","zzI",};
+const int8_t upanddown[] PROGMEM = {
+  -4,   0,   0,   1,
+   1,   2,   5,
+   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   8,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,  30,  30,  30,  30, -39, -39,  30,  30,   8,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,  30,  30,  30,  30,  49,  49,  30,  30,   8,   0,   0,   0,
+   0,   0,   0,   0,   0,   0,   0,   0,  30,  30,  30,  30,  30,  30,  30,  30,   8,   0,   0,   0,
+};
+   const char* skillNameWithType[]={"bdFI","bkI","bkArmFI","bkArmLFI","bkFI","bkLI","crArmFI","crArmLI","crFI","crLI","gpFI","gpLI","hlwI","jpFI","lftFI","lftLI","phFI","phLI","trArmFI","trArmLI","trFI","trLI","vtArmFI","vtFI","vtLI","wkArmFI","wkArmLI","wkFI","wkLI","balanceI","buttUpI","calibI","droppedI","liftedI","lndI","restI","sitI","strI","upI","zeroN","angI","bfI","bxI","chrI","ckI","clappingI","cmhI","dgI","dropI","ffI","fivI","gdbI","hdsI","hgI","hiI","hskI","huI","huntI","jmpI","kcI","knockI","lpovI","mwI","ndI","pdI","peeI","pickI","puI","pu1I","putAwayI","rcI","rlI","scrhI","shootI","showOffI","snfI","tblI","throI","tsI","whI","zzI", "upandownN",};
 #if !defined(MAIN_SKETCH) || !defined(I2C_EEPROM)
 		//if it's not the main sketch to save data or there's no external EEPROM, 
 		//the list should always contain all information.
-  const int8_t* progmemPointer[] = {bdF, bk, bkArmF, bkArmLF, bkF, bkL, crArmF, crArmL, crF, crL, gpF, gpL, hlw, jpF, lftF, lftL, phF, phL, trArmF, trArmL, trF, trL, vtArmF, vtF, vtL, wkArmF, wkArmL, wkF, wkL, balance, buttUp, calib, dropped, lifted, lnd, rest, sit, str, up, zero, ang, bf, bx, chr, ck, clapping, cmh, dg, drop, ff, fiv, gdb, hds, hg, hi, hsk, hu, hunt, jmp, kc, knock, lpov, mw, nd, pd, pee, pick, pu, pu1, putAway, rc, rl, scrh, shoot, showOff, snf, tbl, thro, ts, wh, zz, };
+  const int8_t* progmemPointer[] = {bdF, bk, bkArmF, bkArmLF, bkF, bkL, crArmF, crArmL, crF, crL, gpF, gpL, hlw, jpF, lftF, lftL, phF, phL, trArmF, trArmL, trF, trL, vtArmF, vtF, vtL, wkArmF, wkArmL, wkF, wkL, balance, buttUp, calib, dropped, lifted, lnd, rest, sit, str, up, zero, ang, bf, bx, chr, ck, clapping, cmh, dg, drop, ff, fiv, gdb, hds, hg, hi, hsk, hu, hunt, jmp, kc, knock, lpov, mw, nd, pd, pee, pick, pu, pu1, putAway, rc, rl, scrh, shoot, showOff, snf, tbl, thro, ts, wh, zz, upanddown };
 #else	//only need to know the pointers to newbilities, because the intuitions have been saved onto external EEPROM,
 	//while the newbilities on progmem are assigned to new addresses
-  const int8_t* progmemPointer[] = {zero, };
+  const int8_t* progmemPointer[] = {zero, upanddown, };
 #endif
 //the total byte of instincts is 19347
 //the maximal array size is 933 bytes of wkF. 

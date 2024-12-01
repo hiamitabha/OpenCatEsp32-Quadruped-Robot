@@ -5,8 +5,8 @@
 // #define CUB
 
 
-// #define BiBoard_V0_1  //ESP32 Board with 12 channels of built-in PWM for joints
-#define BiBoard_V0_2
+#define BiBoard_V0_1  //ESP32 Board with 12 channels of built-in PWM for joints
+//#define BiBoard_V0_2
 // #define BiBoard_V1_0
 // #define BiBoard2  //ESP32 Board with 16 channels of PCA9685 PWM for joints
 //***********************
@@ -16,6 +16,7 @@
 
 // you can also activate the following modes (they will diable the gyro to save programming space)
 // allowed combinations: RANDOM_MIND + ULTRASONIC, RANDOM_MIND, ULTRASONIC, VOICE, CAMERA
+
 #define VOICE                     // Petoi Grove voice module
 #define ULTRASONIC                // for Petoi RGB ultrasonic distance sensor
 #define PIR                       // for PIR (Passive Infrared) sensor
@@ -26,6 +27,7 @@
 #define CAMERA                    // for Mu Vision camera
 #define QUICK_DEMO                // for quick demo
 // #define ROBOT_ARM               // for attaching head clip arm
+
 #include "src/OpenCat.h"
 
 void setup() {
