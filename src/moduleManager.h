@@ -34,6 +34,10 @@
 #include "doubleInfraredDistance.h"
 #endif
 
+#ifdef BACKTOUCH_PIN
+#include "backTouch.h"
+#endif
+
 #ifdef ROBOT_ARM
 #include "robotArm.h"
 #endif
@@ -56,7 +60,7 @@ bool moduleActivatedQfunction(char moduleCode) {
   return moduleActivatedQ[indexOfModule(moduleCode)];
 }
 
-int8_t activeModuleIdx() {
+int8_t activeModuleIdx() {  // designed to work if only one active module is allowed
   for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++)
     if (moduleActivatedQ[i])
       return i;
@@ -64,16 +68,18 @@ int8_t activeModuleIdx() {
 }
 
 void initModule(char moduleCode) {
+  bool successQ = true;
+  int8_t index = indexOfModule(moduleCode);
   switch (moduleCode) {
     case EXTENSION_GROVE_SERIAL:
       {
+        PTLF("Start Serial2");
 #ifdef BiBoard_V1_0
         Serial2.begin(115200, SERIAL_8N1, 9, 10);
 #else
         Serial2.begin(115200, SERIAL_8N1, UART_RX2, UART_TX2);
 #endif
         Serial2.setTimeout(SERIAL_TIMEOUT);
-        PTL("Start Serial 2");
         break;
       }
 #ifdef VOICE
@@ -130,15 +136,26 @@ void initModule(char moduleCode) {
         break;
       }
 #endif
+#ifdef BACKTOUCH_PIN
+    case EXTENSION_BACKTOUCH:
+      {
+        backTouchSetup();
+        break;
+      }
+#endif
 #ifdef CAMERA
     case EXTENSION_CAMERA:
       {
+        updateGyroQ = false;
+        i2cDetect(Wire);
+#if defined BiBoard_V1_0 && !defined NYBBLE
+        i2cDetect(Wire1);
+#endif
         loadBySkillName("sit");
         if (!cameraSetup()) {
           int i = indexOfModule(moduleCode);
-          PTHL("- disable", moduleNames[i]);
-          moduleActivatedQ[i] = false;
-          i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, false);
+          PTHL("*** Fail to start ", moduleNames[i]);
+          successQ = false;
         }
         break;
       }
@@ -150,6 +167,12 @@ void initModule(char moduleCode) {
       }
 #endif
   }
+  moduleActivatedQ[index] = successQ;
+#ifdef I2C_EEPROM_ADDRESS
+  i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + index, successQ);
+#else
+  config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
+#endif
 }
 
 void stopModule(char moduleCode) {
@@ -190,6 +213,7 @@ void stopModule(char moduleCode) {
 #ifdef DOUBLE_IR_DISTANCE
     case EXTENSION_DOUBLE_IR_DISTANCE:
       {
+        manualHeadQ = false;
         break;
       }
 #endif
@@ -210,6 +234,14 @@ void stopModule(char moduleCode) {
     case EXTENSION_CAMERA:
       {
         // cameraStop();   // Todo
+        cameraSetupSuccessful = false;
+        cameraTaskActiveQ = 0;
+        break;
+      }
+#endif
+#ifdef BACKTOUCH_PIN
+    case EXTENSION_BACKTOUCH:
+      {
         break;
       }
 #endif
@@ -225,31 +257,54 @@ void showModuleStatus() {
   byte moduleCount = sizeof(moduleList) / sizeof(char);
   printListWithoutString((char *)moduleList, moduleCount);
   printListWithoutString(moduleActivatedQ, moduleCount);
+  moduleDemoQ = (moduleActivatedQfunction(EXTENSION_DOUBLE_LIGHT)
+                 || moduleActivatedQfunction(EXTENSION_DOUBLE_TOUCH)
+                 || moduleActivatedQfunction(EXTENSION_GESTURE)
+                 || moduleActivatedQfunction(EXTENSION_DOUBLE_IR_DISTANCE)
+                 || moduleActivatedQfunction(EXTENSION_CAMERA)
+                 || moduleActivatedQfunction(EXTENSION_PIR)
+                 // || moduleActivatedQfunction(EXTENSION_BACKTOUCH)
+                 // || moduleActivatedQfunction(EXTENSION_ULTRASONIC)
+                 || moduleActivatedQfunction(EXTENSION_QUICK_DEMO));
 }
 
-void reconfigureTheActiveModule(char *moduleCode) {               // negative number will deactivate all the modules
-  for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {  // disable unneeded modules
-    if (moduleActivatedQ[i] && moduleList[i] != moduleCode[0]) {
+void reconfigureTheActiveModule(char *moduleCode) {
+  if (moduleCode[0] == '?') {
+    showModuleStatus();
+    return;
+  }
+  bool statusChangedQ = false;
+  // PTHL("mode", moduleCode);                                          // negative number will deactivate all the modules
+  for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {                                               // disable unneeded modules
+    if (moduleActivatedQ[i] && moduleList[i] != moduleCode[0]) {                                               // if the modules is active and different from the new module
+      if ((moduleList[i] == EXTENSION_VOICE || moduleList[i] == EXTENSION_BACKTOUCH) && moduleCode[0] != '~')  // it won't disable the voice and backtouch
+        continue;
       PTHL("- disable", moduleNames[i]);
       stopModule(moduleList[i]);
       moduleActivatedQ[i] = false;
+      statusChangedQ = true;
+#ifdef I2C_EEPROM_ADDRESS
       i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, false);
+#endif
     }
   }
+#ifndef I2C_EEPROM_ADDRESS
+  config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
+#endif
   for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {
     if (moduleList[i] == moduleCode[0] && !moduleActivatedQ[i]) {
       PTHL("+  enable", moduleNames[i]);
       initModule(moduleList[i]);
-      moduleActivatedQ[i] = true;
-      i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, true);
+      statusChangedQ = true;
     }
   }
-  showModuleStatus();
+  if (statusChangedQ)  // if the status of the modules has changed, show the new status
+    showModuleStatus();
 }
 
 void initModuleManager() {
   byte moduleCount = sizeof(moduleList) / sizeof(char);
-  PTL(moduleCount);
+  PTHL("Module count: ", moduleCount);
   for (byte i = 0; i < moduleCount; i++) {
     if (moduleActivatedQ[i]) {
       initModule(moduleList[i]);
@@ -259,10 +314,9 @@ void initModuleManager() {
       voiceStop();
     }
 #endif
-#ifdef NYBBLE
+#if defined ULTRASONIC && defined NYBBLE
     else if (moduleList[i] == EXTENSION_ULTRASONIC) {
       rgbUltrasonicSetup();
-      // initModule(moduleList[i]);
     }
 #endif
   }
@@ -298,7 +352,7 @@ void read_serial() {
         // long current = millis();
         // PTH(source, current - lastSerialTime);
         do {
-          if ((token == T_SKILL || lowerToken == T_INDEXED_SIMULTANEOUS_ASC || lowerToken == T_INDEXED_SEQUENTIAL_ASC) && cmdLen >= spaceAfterStoringData || cmdLen > BUFF_LEN) {
+          if (((token == T_SKILL || lowerToken == T_INDEXED_SIMULTANEOUS_ASC || lowerToken == T_INDEXED_SEQUENTIAL_ASC) && cmdLen >= spaceAfterStoringData) || cmdLen > BUFF_LEN) {
             PTH("Cmd Length: ", cmdLen);
             PTF("OVF");
             beep(5, 100, 50, 5);
@@ -312,6 +366,7 @@ void read_serial() {
             return;
           }
           newCmd[cmdLen++] = serialPort->read();
+          // PTHL(newCmd[cmdLen - 1], int8_t(newCmd[cmdLen - 1]));
         } while (serialPort->available());
         lastSerialTime = millis();
       }
@@ -331,9 +386,11 @@ void read_serial() {
     }
     cmdLen = (newCmd[cmdLen - 1] == terminator) ? cmdLen - 1 : cmdLen;
     newCmd[cmdLen] = (token >= 'A' && token <= 'Z') ? '~' : '\0';
+    if (token >= 'A' && token <= 'Z')
+      newCmd[cmdLen + 1] = '\0';
     newCmdIdx = 2;
     // PTH("read_serial, cmdLen = ", cmdLen);
-    // printCmdByType(token, newCmd, cmdLen);
+    // printCmdByType(token, newCmd);
   }
 }
 
@@ -347,9 +404,15 @@ void readSignal() {
   detectBle();  //  newCmdIdx = 3;
   readBle();
 #endif
-
+#ifdef BT_CLIENT
+  readBleClient();
+#endif
+// #ifdef WEB_SERVER
+//   if (webServerConnected)
+//     webServer.handleClient();
+// #endif
 #ifdef VOICE
-  if (moduleList[moduleIndex] == EXTENSION_VOICE)
+  if (moduleActivatedQ[indexOfModule(EXTENSION_VOICE)])
     read_voice();
 #endif
 
@@ -362,46 +425,47 @@ void readSignal() {
                 IDLE_TIME
 #endif
       ;
-  else if (token != T_CALIBRATE && token != T_SERVO_FOLLOW && token != T_SERVO_FEEDBACK && current - idleTimer > 0) {
+  else if (token != T_SERVO_CALIBRATE && token != T_SERVO_FOLLOW && token != T_SERVO_FEEDBACK && current - idleTimer > 0) {
     if (moduleIndex == -1)  // no active module
       return;
-
 #ifdef CAMERA
-    if (moduleList[moduleIndex] == EXTENSION_CAMERA)
+    if (moduleActivatedQ[indexOfModule(EXTENSION_CAMERA)])
       read_camera();
 #endif
 #ifdef ULTRASONIC
-    if (moduleList[moduleIndex] == EXTENSION_ULTRASONIC) {
-      readRGBultrasonic();
-    }
+    if (moduleActivatedQ[indexOfModule(EXTENSION_ULTRASONIC)])
+      read_RGBultrasonic();
 #endif
 #ifdef GESTURE
-    if (moduleList[moduleIndex] == EXTENSION_GESTURE)
-      read_gesture();
+    if (moduleActivatedQ[indexOfModule(EXTENSION_GESTURE)])
+    {
+      gestureGetValue = read_gesture();
+      // PTHL("gestureValue02:", gestureGetValue);
+    }
 #endif
 #ifdef PIR
-    if (moduleList[moduleIndex] == EXTENSION_PIR)
+    if (moduleActivatedQ[indexOfModule(EXTENSION_PIR)])
       read_PIR();
 #endif
 #ifdef DOUBLE_TOUCH
-    if (moduleList[moduleIndex] == EXTENSION_DOUBLE_TOUCH)
+    if (moduleActivatedQ[indexOfModule(EXTENSION_DOUBLE_TOUCH)])
       read_doubleTouch();
 #endif
 #ifdef DOUBLE_LIGHT
-    if (moduleList[moduleIndex] == EXTENSION_DOUBLE_LIGHT)
+    if (moduleActivatedQ[indexOfModule(EXTENSION_DOUBLE_LIGHT)])
       read_doubleLight();
 #endif
 #ifdef DOUBLE_INFRARED_DISTANCE
-    if (moduleList[moduleIndex] == EXTENSION_DOUBLE_IR_DISTANCE)
+    if (moduleActivatedQ[indexOfModule(EXTENSION_DOUBLE_IR_DISTANCE)])
       read_doubleInfraredDistance();  // has some bugs
 #endif
-#ifdef TOUCH0
-    read_touch();
+#ifdef BACKTOUCH_PIN
+    if (moduleActivatedQ[indexOfModule(EXTENSION_BACKTOUCH)])
+      read_backTouch();
 #endif
     // powerSaver -> 4
     // other -> 5
     // randomMind -> 100
-
     if (autoSwitch) {
       randomMind();             // make the robot do random demos
       powerSaver(POWER_SAVER);  // make the robot rest after a certain period, the unit is seconds
@@ -418,4 +482,37 @@ void readHuman() {
 // — generate behavior by fusing all sensors and instruction
 String decision() {
   return "";
+}
+
+void read_sound() {
+}
+
+void read_GPS() {
+}
+#ifdef TOUCH0
+void read_touch() {
+  byte touchPin[] = {
+    TOUCH0,
+    TOUCH1,
+    TOUCH2,
+    TOUCH3,
+  };
+  for (byte t = 0; t < 4; t++) {
+    int touchValue = touchRead(touchPin[t]);  // do something with the touch?
+    //    PT(touchValue);
+    //    PT('\t');
+  }
+  //  PTL();
+}
+#endif
+void readEnvironment() {
+#ifdef GYRO_PIN
+  // if (updateGyroQ && !(frame % imuSkip))
+  //   imuUpdated = readIMU();
+  if (updateGyroQ)
+    if (imuUpdated && printGyroQ)
+      print6Axis();
+#endif
+  read_sound();
+  read_GPS();
 }
