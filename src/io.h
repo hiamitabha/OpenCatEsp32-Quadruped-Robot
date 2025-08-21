@@ -39,14 +39,10 @@ void blueSspSetup() {
   SerialBT.enableSSP();
   SerialBT.onConfirmRequest(BTConfirmRequestCallback);
   SerialBT.onAuthComplete(BTAuthCompleteCallback);
-#ifdef I2C_EEPROM_ADDRESS
-  PTHL("SSP:\t", strcat(readLongByBytes(EEPROM_BLE_NAME), "_SSP"));
-  SerialBT.begin(strcat(readLongByBytes(EEPROM_BLE_NAME), "_SSP"));  // Bluetooth device name
-#else
-  String blueID = "" + config.getString("ID", "P") + "_SSP";
-  PTHL("SSP:\t", blueID);
-  SerialBT.begin(blueID.c_str());  // Bluetooth device name
-#endif
+  char *sspName = getDeviceName("_SSP");
+  PTHL("SSP:\t", sspName);
+  SerialBT.begin(sspName);  // Bluetooth device name
+  delete[] sspName;         // Free the allocated memory
   Serial.println("The SSP device is started, now you can pair it with Bluetooth!");
 }
 

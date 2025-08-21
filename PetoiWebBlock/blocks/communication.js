@@ -26,298 +26,450 @@ function getDeviceModel()
   return deviceModel;
 }
 
-// 声明连接机器人积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'make_connection',
-    message0: "Connect with IP %1",
-    args0: [
-      {
-        type: "field_input",
-        name: "IP_ADDRESS",
-        text: "192.168.4.1"
-      }
-    ],
-    nextStatement: null,
-    colour: 230,
-    tooltip: "Init connection test to the robot with IP address",
-    helpUrl: ""
-  },
-]);
-
-// 连接机器人函数实现 - 异步版本
-async function makeConnection(ip, timeout = 2000)
-{
-  try
-  {
-    // 连接设备：使用IP发送问号命令
-    // console.log(getText("connectingDevice") + ip);
-
-    // 使用异步HTTP请求函数发送问号命令
-    const model = await httpRequest(ip, '?', timeout, true);
-    // console.log(getText("deviceResponseInfo") + model);
-
+// 连接机器人函数实现 - WebSocket版本
+async function makeConnection(ip, timeout = TIMEOUT_CONFIG.WEB_REQUEST.CONNECTION_TIMEOUT) {
+  try {
+    if (window.client) {
+      // 如果已经有连接，先断开
+      window.client.disconnect();
+      window.client = null; // 清除全局客户端实例
+    }
+    // 创建WebSocket客户端
+    const client = new PetoiAsyncClient(`ws://${ip}:81`);
+    // window.client = client;
+    // 尝试连接
+    await client.connect();
+    // 发送问号命令测试连接
+    const model = await client.sendCommand('?');
+    
     // 更严格地检查响应内容，特别识别模拟数据
-    if (model && model.length > 0 && model.trim() !== '?' && model.trim() !== '' && model.trim() !== 'PetoiModel-v1.0')
-    {
+    if (model && model.length > 0 && model.trim() !== '?' && model.trim() !== '' && model.trim() !== 'PetoiModel-v1.0') {
       setDeviceIP(ip);
       setDeviceModel(model);
-      // console.log(getText("deviceModelInfo") + model);
+      // 设置全局客户端实例
+      window.client = client;
+      client.startHeartbeat();
       return true;
-    } else
-    {
-      if (model.trim() === 'PetoiModel-v1.0')
-      {
-        // console.error(getText("errorMockData"));
+    } else {
+      if (model.trim() === 'PetoiModel-v1.0') {
         alert(getText("connectionFailedMock") + '\n\n' + getText("programExecutionStopped"));
-      } else
-      {
+      } else {
         alert(getText("connectionFailedCheck") + '\n\n' + getText("programExecutionStopped"));
       }
       return false;
     }
-  } catch (err)
-  {
-    // console.error(getText("connectionError") + err.message);
+  } catch (err) {
+    client.disconnect();
     // 显示友好的错误信息，并明确说明程序已中断
-    if (err.message.includes('timeout') || err.message.includes('超时'))
-    {
+    if (err.message.includes('timeout') || err.message.includes('超时')) {
       alert(getText("connectionTimeout").replace("{ip}", ip) + '\n\n' + getText("programExecutionStopped"));
-    } else if (err.message.includes('Failed to fetch') || err.message.includes('Connection reset') || err.message.includes('ERR_CONNECTION_RESET'))
-    {
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('Connection reset') || err.message.includes('ERR_CONNECTION_RESET')) {
       alert(getText("deviceConnectionLost").replace("{ip}", ip) + '\n\n' + getText("checkDeviceAndNetwork") + '\n\n' + getText("programExecutionStopped"));
-    } else if (err.message.includes('Network Error') || err.message.includes('网络'))
-    {
+    } else if (err.message.includes('Network Error') || err.message.includes('网络')) {
       alert(getText("networkError").replace("{ip}", ip) + '\n\n' + getText("programExecutionStopped"));
-    } else
-    {
+    } else {
       alert(getText("connectionErrorDetails").replace("{error}", err.message) + '\n\n' + getText("programExecutionStopped"));
     }
     return false;
   }
 }
 
-// 连接机器人代码生成
-javascript.javascriptGenerator.forBlock['make_connection'] = function (block)
+// 关闭连接函数实现
+async function closeConnection() {
+  try {
+    if (window.client) {
+      await window.client.disconnect();
+      // 清除全局客户端实例
+      window.client = null;
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error(getText("closeConnectionError"), err);
+    return false;
+  }
+}
+
+// 全局异步客户端类定义
+// PetoiAsyncClient 类已移动到 petoi_async_client.js 文件中
+
+function webRequest(command, timeout = TIMEOUT_CONFIG.WEB_REQUEST.DEFAULT_TIMEOUT, needResponse = true, displayCommand = null, bypassStopCheck = false) {
+  return new Promise(async (resolve, reject) =>
+    {
+      try
+      {
+        // 检查停止标志（除非明确绕过）
+        if (!bypassStopCheck && typeof stopExecution !== 'undefined' && stopExecution) {
+          reject(new Error("程序执行被用户停止"));
+          return;
+        }
+        
+        // 使用全局的 WebSocket 客户端实例
+        if (!window.client) {
+          reject(new Error(getText("noConnectionEstablished")));
+          return;
+        }
+        
+        // 如果showSentCommands开关激活，打印发送的命令
+        if (typeof showSentCommands !== 'undefined' && showSentCommands) {
+          // 使用displayCommand参数或默认处理
+          let commandToDisplay = displayCommand || command;
+          if (!displayCommand && command.startsWith("b64:")) {
+            try {
+              const decoded = decodeCommand(command);
+              if (decoded && decoded.token && decoded.params) {
+                commandToDisplay = `${decoded.token} ${decoded.params.join(" ")}`;
+              }
+            } catch (error) {
+              // 如果解码失败，保持原命令
+              commandToDisplay = command;
+            }
+          }
+          console.log(getText("sendingCommand") + commandToDisplay);
+        }
+        
+        let result = await window.client.sendCommand(command, timeout);
+        if (Array.isArray(result) && result.length == 1) {
+          result = result[0];
+        }
+        
+        // 根据 needResponse 参数决定是否返回结果
+        // 注意：即使showSentCommands激活，我们也需要返回实际结果给传感器积木块使用
+        resolve(needResponse ? result : true);
+      } catch (error) {
+        console.error(getText("httpRequestError"), error);
+        reject(error);
+      }
+    });
+}
+
+function webBatchRequest(commands, timeout = TIMEOUT_CONFIG.WEB_REQUEST.BATCH_REQUEST_TIMEOUT, needResponse = true)
 {
-  const ip = block.getFieldValue('IP_ADDRESS');
-
-  return `try {
-  const connectionResult = await makeConnection("${ip}");
-  if(connectionResult) {
-    deviceIP = "${ip}";
-    console.log(getText("connectedToDevice") + deviceIP);
-  } else {
-    console.log("连接失败，后续操作可能无法正常执行");
-  }
-} catch (error) {
-  console.error("连接错误:", error.message);
-}`;
-};
-
-// 数字输入积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'get_digital_input',
-    message0: "获取数字输入 %1",
-    args0: [
-      {
-        type: "field_dropdown",
-        name: "PIN",
-        options: [
-          ["34", "34"],
-          ["35", "35"],
-          ["36", "36"],
-          ["39", "39"],
-          ["BackTouch(38)", "38"],
-          ["Rx2(9)", "9"],
-          ["Tx2(10)", "10"],
-          // ["D1", "D1"],
-          // ["D2", "D2"],
-          // ["D3", "D3"],
-          // ["D4", "D4"],
-          // ["D5", "D5"],
-          // ["D6", "D6"],
-          // ["D7", "D7"],
-          // ["D8", "D8"]
-        ]
+  return new Promise(async (resolve, reject) => {
+    try
+    {
+      // 使用全局的 WebSocket 客户端实例
+      if (!window.client) {
+        reject(new Error(getText("noConnectionEstablished")));
+        return;
       }
-    ],
-    output: true,
-    outputType: "Number",
-    colour: 230,
-    tooltip: "读取数字输入引脚的状态（0或1）",
-    helpUrl: ""
-  }
-]);
-
-// 模拟输入积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'get_analog_input',
-    message0: "获取模拟输入 %1",
-    args0: [
-      {
-        type: "field_dropdown",
-        name: "PIN",
-        options: [
-          ["34", "34"],
-          ["35", "35"],
-          ["36", "36"],
-          ["39", "39"],
-          ["BackTouch(38)", "38"],
-          ["Rx2(9)", "9"],
-          ["Tx2(10)", "10"],
-          //          ["A1", "A1"],
-          //          ["A2", "A2"],
-          //          ["A3", "A3"],
-          //          ["A4", "A4"],
-          //          ["A5", "A5"],
-          //          ["A6", "A6"],
-          //          ["A7", "A7"],
-          //          ["A8", "A8"]
-        ]
+      
+      // 如果showSentCommands开关激活，打印发送的命令
+      if (typeof showSentCommands !== 'undefined' && showSentCommands) {
+        // 解码base64命令并显示可读格式
+        const displayCommands = commands.map(cmd => {
+          if (cmd.startsWith("b64:")) {
+            try {
+              const decoded = decodeCommand(cmd);
+              if (decoded && decoded.token && decoded.params) {
+                return `${decoded.token} ${decoded.params.join(" ")}`;
+              }
+            } catch (error) {
+              // 如果解码失败，保持原命令
+            }
+          }
+          return cmd;
+        });
+        console.log(getText("sendingCommand") + displayCommands.join(', '));
       }
-    ],
-    output: true,
-    outputType: "Number",
-    colour: 230,
-    tooltip: "读取模拟输入引脚的值（0-4095）",
-    helpUrl: ""
-  }
-]);
+      
+      const result = await window.client.sendCommand(commands, timeout);
+      resolve(needResponse ? result : true);
+    } catch (error)
+    {
+      console.error(getText("webBatchRequestError"), error);
+      reject(error);
+    }
+  });
+}
 
-// 设置模拟输出积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'set_analog_output',
-    message0: "设置模拟输出 引脚 %1 数值 %2",
-    args0: [
-      {
-        type: "field_dropdown",
-        name: "PIN",
-        options: [
-          ["25", "25"],
-          ["26", "26"]
-        ]
-      },
-      {
-        type: "field_number",
-        name: "VALUE",
-        value: 0,
-        min: 0,
-        max: 255,
-        precision: 1
-      }
-    ],
-    previousStatement: null,
-    nextStatement: null,
-    colour: 230,
-    tooltip: "设置模拟输出引脚的数值（0-255）",
-    helpUrl: ""
-  }
-]);
-
-// 代码生成:设置模拟输出积木
-javascript.javascriptGenerator.forBlock['set_analog_output'] = function (block)
+// 添加来自websocket的事件监听
+function addWebSocketEventListeners(eventName, callback)
 {
-  const pin = block.getFieldValue('PIN');
-  const value = block.getFieldValue('VALUE');
+   if (!window.client) {
+    return;
+   }
+   window.client.eventTarget.addEventListener(eventName, async (event) => {
+     try {
+       await callback(event);
+     } catch (error) {
+       console.error(getText("messageProcessingError"), error);
+     }
+   });
+}
 
-  return `console.log(await httpRequest(deviceIP, "AnalogWrite(${pin},${value})", 2000, true));\n`;
-};
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-// 定义设置数字输出积木块
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'set_digital_output',
-    message0: "设置数字输出 引脚 %1 数值 %2",
-    args0: [
-      {
-        type: "field_number",
-        name: "PIN",
-        value: 0,
-        min: 0,
-        max: 40,  // 设置最大引脚数
-        precision: 1
-      },
-      {
-        type: "field_dropdown",
-        name: "VALUE",
-        options: [
-          ["高电平", "1"],
-          ["低电平", "0"]
-        ]
-      }
-    ],
-    previousStatement: null,
-    nextStatement: null,
-    colour: 230,
-    tooltip: "设置数字输出引脚的高低电平（1为高电平，0为低电平）",
-    helpUrl: ""
+// 辅助函数：根据showSentCommands状态决定是否打印webRequest结果
+function logWebRequestResult(result) {
+  // 如果showSentCommands激活，则不打印webRequest的返回值
+  if (typeof showSentCommands !== 'undefined' && showSentCommands) {
+    return;
   }
-]);
+  console.log(result);
+}
 
-// 代码生成:设置数字输出的代码
-javascript.javascriptGenerator.forBlock['set_digital_output'] = function (block)
-{
-  const pin = block.getFieldValue('PIN');
-  const value = block.getFieldValue('VALUE');
+// 控制台输入相关函数
+let consoleInputPromise = null;
+let consoleInputResolve = null;
+let currentInputContainer = null; // 跟踪当前的输入容器
 
-  return `console.log(await httpRequest(deviceIP, "DigitalWrite(${pin},${value})", 2000, true));\n`;
-};
-
-// 发送自定义命令积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'send_custom_command',
-    message0: "发送自定义命令 %1",
-    args0: [
-      {
-        type: "field_input",
-        name: "CUSTOM_COMMAND",
-        text: "命令"
+// 创建控制台输入界面
+function createConsoleInput(prompt) {
+  return new Promise((resolve) => {
+    // 如果已经有输入等待，先取消之前的
+    if (consoleInputPromise) {
+      if (currentInputContainer) {
+        try {
+          currentInputContainer.remove();
+        } catch (e) {
+          // 静默处理错误
+        }
+        currentInputContainer = null;
       }
-    ],
-    previousStatement: null,
-    nextStatement: null,
-    colour: 230,
-    tooltip: "发送自定义HTTP命令",
-    helpUrl: ""
-  }
-]);
-
-// 控制台打印积木
-Blockly.defineBlocksWithJsonArray([
-  {
-    type: 'console_log_variable',
-    message0: "控制台打印 变量名 %1 数值 %2",
-    args0: [
-      {
-        type: "field_input",
-        name: "VAR_NAME",
-        text: "变量名"
-      },
-      {
-        type: "input_value",
-        name: "VALUE",
-        check: null  // 接受任何类型的输入，移除类型限制
+      consoleInputResolve('');
+      consoleInputPromise = null;
+    }
+    
+    consoleInputPromise = true;
+    consoleInputResolve = resolve;
+    
+    // 检查程序是否被停止
+    if (typeof stopExecution !== 'undefined' && stopExecution) {
+      resolve('');
+      return;
+    }
+    
+    // 创建输入界面
+    const consoleLog = document.getElementById('consoleLog');
+    if (!consoleLog) {
+      resolve('');
+      return;
+    }
+    
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'console-input-container';
+    
+    const promptSpan = document.createElement('span');
+    promptSpan.textContent = prompt;
+    promptSpan.style.cssText = `
+      color: #FFA500;
+      margin-right: 10px;
+      font-family: 'Consolas', monospace;
+    `;
+    
+    const inputField = document.createElement('input');
+    inputField.type = 'text';
+    inputField.className = 'console-input-field';
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.textContent = 'Enter';
+    
+    inputContainer.appendChild(promptSpan);
+    inputContainer.appendChild(inputField);
+    inputContainer.appendChild(submitBtn);
+    
+    // 保存对当前输入容器的引用
+    currentInputContainer = inputContainer;
+    
+    consoleLog.appendChild(inputContainer);
+    
+    // 延迟聚焦，确保DOM完全渲染
+    setTimeout(() => {
+      if (inputField && document.contains(inputField)) {
+        inputField.focus();
+        
+        // 设置输入框属性，防止被意外修改
+        inputField.setAttribute('data-console-input', 'true');
+        inputField.setAttribute('autocomplete', 'off');
+        inputField.setAttribute('spellcheck', 'false');
+        
+        // 确保输入框可编辑
+        inputField.removeAttribute('disabled');
+        inputField.removeAttribute('readonly');
+        inputField.contentEditable = false;
+        
+        // 监听输入框属性变化
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes') {
+              const target = mutation.target;
+              if (target.disabled || target.readOnly) {
+                target.disabled = false;
+                target.readOnly = false;
+              }
+            }
+          });
+        });
+        
+        observer.observe(inputField, {
+          attributes: true,
+          attributeFilter: ['disabled', 'readonly']
+        });
+        
+        // 防止输入框被其他代码干扰
+        const originalFocus = inputField.focus;
+        const originalBlur = inputField.blur;
+        
+        // 重写focus方法，确保聚焦成功
+        inputField.focus = function() {
+          try {
+            originalFocus.call(this);
+            // 确保输入框可编辑
+            this.disabled = false;
+            this.readOnly = false;
+            this.contentEditable = false;
+          } catch (e) {
+            // 静默处理错误
+          }
+        };
+        
+        // 重写blur方法，防止意外失去焦点
+        inputField.blur = function() {
+          // 只有在提交时才允许失去焦点
+          if (!consoleInputPromise) {
+            originalBlur.call(this);
+          } else {
+            this.focus();
+          }
+        };
       }
-    ],
-    previousStatement: null,
-    nextStatement: null,
-    colour: 290,  // 紫色系
-    tooltip: "在控制台打印变量名和对应的数值",
-    helpUrl: ""
+    }, 100);
+    
+    // 处理输入提交
+    const handleSubmit = () => {
+      const value = inputField.value;
+      
+      // 清理状态
+      try {
+        if (consoleLog.contains(inputContainer)) {
+          consoleLog.removeChild(inputContainer);
+        }
+      } catch (e) {
+        // 静默处理错误
+      }
+      
+      currentInputContainer = null;
+      consoleInputPromise = null;
+      consoleInputResolve(value);
+    };
+    
+    // 回车键提交
+    inputField.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault(); // 防止默认行为
+        handleSubmit();
+      }
+    });
+    
+    // 点击按钮提交
+    submitBtn.addEventListener('click', (e) => {
+      e.preventDefault(); // 防止默认行为
+      handleSubmit();
+    });
+    
+    // 防止输入框失去焦点时被意外清理
+    inputField.addEventListener('blur', (e) => {
+      // 延迟检查，避免在提交过程中触发
+      setTimeout(() => {
+        if (consoleInputPromise && document.contains(inputField)) {
+          // 尝试重新聚焦
+          try {
+            inputField.focus();
+            // 如果重新聚焦失败，再次尝试
+            setTimeout(() => {
+              if (document.contains(inputField) && document.activeElement !== inputField) {
+                inputField.focus();
+              }
+            }, 50);
+          } catch (focusError) {
+            // 静默处理错误
+          }
+        }
+      }, 100);
+    });
+    
+    // 防止输入框被意外禁用
+    inputField.addEventListener('input', (e) => {
+      if (e.target.disabled || e.target.readOnly) {
+        e.target.disabled = false;
+        e.target.readOnly = false;
+      }
+    });
+    
+    // 添加日志条目显示提示
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
+    logEntry.style.cssText = `
+      color: #FFA500;
+      font-family: 'Consolas', monospace;
+      margin: 5px 0;
+    `;
+    
+    // 使用与其他console log一致的timestamp格式
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+    const timestamp = `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
+    logEntry.innerHTML = `<span class="timestamp" style="color: #888; font-family: 'Consolas', monospace;">${timestamp}</span> ${prompt}`;
+    consoleLog.appendChild(logEntry);
+  });
+}
+
+// 控制台输入函数
+async function consoleInput(prompt) {
+  // 防止重复调用
+  if (consoleInputPromise) {
+    clearConsoleInput();
+    // 等待一小段时间确保清理完成
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
-]);
+  
+  return await createConsoleInput(prompt);
+}
 
-// 代码生成:控制台打印积木
-javascript.javascriptGenerator.forBlock['console_log_variable'] = function (block)
-{
-  const varName = block.getFieldValue('VAR_NAME');
-  const value = Blockly.JavaScript.valueToCode(block, 'VALUE', Blockly.JavaScript.ORDER_NONE) || '0';
+// 将函数暴露到全局作用域
+window.consoleInput = consoleInput;
+window.createConsoleInput = createConsoleInput;
+window.clearConsoleInput = clearConsoleInput;
 
-  // 使用asyncLog函数确保消息立即显示并且按顺序执行
-  return `await asyncLog("${varName}: " + (${value}));`;
-};
+// 清理控制台输入界面
+function clearConsoleInput() {
+  if (consoleInputPromise) {
+    // 移除输入界面
+    if (currentInputContainer) {
+      try {
+        if (currentInputContainer.parentNode) {
+          currentInputContainer.parentNode.removeChild(currentInputContainer);
+        }
+      } catch (e) {
+        // 静默处理错误
+      }
+      currentInputContainer = null;
+    } else {
+      // 备用清理方法
+      const consoleLog = document.getElementById('consoleLog');
+      if (consoleLog) {
+        const inputContainer = consoleLog.querySelector('.console-input-container');
+        if (inputContainer) {
+          try {
+            consoleLog.removeChild(inputContainer);
+          } catch (e) {
+            // 静默处理错误
+          }
+        }
+      }
+    }
+    
+    // 取消等待
+    if (consoleInputResolve) {
+      consoleInputResolve('');
+    }
+    consoleInputPromise = null;
+    consoleInputResolve = null;
+  }
+}

@@ -310,7 +310,9 @@ public:
                 && ((imuException != IMU_EXCEPTION_FLIPPED && !strcmp(skillName, "rc"))    // recovered during recover
                     || (imuException == IMU_EXCEPTION_FLIPPED && strcmp(skillName, "rc"))  // flipped during other skills
                     ))) {
+#ifdef GYRO_PIN
           print6Axis();
+#endif
           PTHL("imuException: ", imuException);
           PTLF("Behavior interrupted");
           interruptedDuringBehavior = true;
@@ -359,7 +361,7 @@ public:
         }
       }
       gyroBalanceQ = gyroBalanceQlag;
-      printToAllPorts(token);
+      // printToAllPorts(token); // avoid printing the token twice. may be introduced to fix some other issues.
     } else {  // postures and gaits
 #ifdef GYRO_PIN
       if (imuUpdated && gyroBalanceQ && !(frame % imuSkip)) {

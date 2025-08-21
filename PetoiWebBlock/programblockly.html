@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Petoi Web Coding Blocks</title>
+  <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
   <!-- 1. 首先加载 Blockly 核心文件 -->
   <script src="./node_modules/blockly/blockly_compressed.js"></script>
   <script src="./node_modules/blockly/blocks_compressed.js"></script>
@@ -13,697 +14,46 @@
   <!-- <script src="./node_modules/blockly/msg/en.js"></script> -->
   <!-- 3. 加载自定义翻译 -->
   <script src="./lang/translations.js"></script>
-  <!-- 4. 然后加载自定义积木块文件 -->
+  <!-- 4. 加载超时配置 -->
+  <script src="./js/timeout_config.js"></script>
+  <!-- 5. 然后加载自定义积木块文件 -->
   <script src="./blocks/communication.js"></script>
-  <script src="./blocks/control.js"></script>
-  <script src="./blocks/sensor.js"></script>
-  <script src="./blocks/motion.js"></script>
   <script src="./blocks/generators.js"></script>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 20px;
-      background-color: #fff;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .title {
-      font-size: 20px;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .language-switch {
-      display: flex;
-      gap: 10px;
-    }
-
-    .lang-btn {
-      padding: 5px 15px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background-color: #fff;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .lang-btn.active {
-      background-color: #007bff;
-      color: #fff;
-      border-color: #007bff;
-    }
-
-    .container {
-      padding: 20px;
-    }
-
-    .button-group {
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      width: 100%;
-    }
-
-    .button-group button {
-      padding: 8px 15px;
-      margin-right: 10px;
-      border: none;
-      border-radius: 4px;
-      background-color: #007bff;
-      color: white;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    .right-aligned-container {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-    }
-
-    .button-group button:hover {
-      background-color: #0056b3;
-    }
-
-    /* 连接成功状态下的Quick Connect按钮样式 */
-    #quickConnectBtn[data-connected="true"] {
-      background-color: #4CAF50 !important;
-      /* 绿色背景 */
-      color: white;
-      font-weight: bold;
-    }
-
-    #quickConnectBtn[data-connected="true"]:hover {
-      background-color: #45a049 !important;
-      /* 深绿色 */
-    }
-
-    .workspace-container {
-      display: flex;
-      gap: 0;
-      /* 移除间隙，由分隔线控制 */
-      height: calc(100vh - 150px);
-      /* 使用视口高度计算容器高度 */
-      width: 100%;
-      position: relative;
-    }
-
-    #blocklyDiv {
-      flex: 7;
-      /* 默认占据70%空间 */
-      height: 100%;
-      /* 使用100%高度填充父容器 */
-      border: 1px solid #ccc;
-      min-width: 0;
-    }
-
-    /* 窗口容器整体样式 */
-    .windows-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-      background-color: #f5f5f5;
-      min-width: 0;
-      width: 100%;
-      padding: 10px;
-      flex: 3;
-      /* 保持固定比例 */
-      gap: 8px;
-      /* 减小容器之间的间距 */
-    }
-
-    /* 控制台区域 */
-    #consoleWindow {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      width: 100%;
-      overflow: hidden;
-      flex: 1;
-      background-color: #1e1e1e;
-      padding: 0;
-      font-family: 'Consolas', monospace;
-    }
-
-    /* 控制台内容项样式 */
-    .console-item {
-      padding: 3px 0;
-      margin-bottom: 3px;
-      font-size: 13px;
-      white-space: nowrap;
-      /* 不自动换行 */
-      line-height: 1.3;
-      color: #ffffff;
-    }
-
-    /* 串口输出区域 */
-    .serial-output {
-      flex: 1;
-      min-height: 0;
-      margin: 0;
-      padding: 10px;
-      overflow-y: auto;
-      overflow-x: auto;
-      /* 启用水平滚动条 */
-      background-color: #1e1e1e;
-      color: #fff;
-      font-family: 'Consolas', monospace;
-      font-size: 13px;
-      white-space: nowrap;
-      /* 不自动换行 */
-      line-height: 1.4;
-      max-width: 100%;
-      user-select: text;
-      /* 允许文本选择 */
-      outline: none;
-      /* 移除默认outline */
-    }
-
-    .serial-output:focus {
-      outline: 1px solid #007bff;
-      /* 获得焦点时显示蓝色outline */
-    }
-
-    .serial-output br {
-      line-height: 1;
-      margin: 0;
-      padding: 0;
-    }
-
-    .serial-input-container {
-      display: flex;
-      gap: 5px;
-      padding: 10px;
-      background-color: #1e1e1e;
-      border-top: 1px solid #333;
-    }
-
-    .serial-input-container input {
-      flex: 1;
-      padding: 5px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-
-    /* 串口按钮区域 */
-    .serial-buttons {
-      display: flex;
-      gap: 10px;
-      padding: 5px;
-      background-color: #f5f5f5;
-      /* 灰色背景，与页面背景一致 */
-      border: none;
-      margin-bottom: 5px;
-      justify-content: flex-end;
-      /* 使按钮靠右对齐 */
-    }
-
-    .serial-button:disabled {
-      background-color: #cccccc;
-      cursor: not-allowed;
-    }
-
-    .wifi-dialog {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      z-index: 1201;
-    }
-
-    .wifi-dialog input {
-      display: block;
-      width: 100%;
-      margin: 10px 0;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-
-    .wifi-dialog .button-container {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 15px;
-    }
-
-    .wifi-dialog button {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .wifi-dialog button.confirm {
-      background-color: #007bff;
-      color: white;
-    }
-
-    .wifi-dialog button.cancel {
-      background-color: #6c757d;
-      color: white;
-    }
-
-    .overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1200;
-    }
-
-    .blocklyZoom>image,
-    .blocklyZoom>svg>image {
-      opacity: 0.4;
-    }
-
-    .blocklyZoom>image:hover,
-    .blocklyZoom>svg>image:hover {
-      opacity: 0.6;
-    }
-
-    .blocklyZoom>image:active,
-    .blocklyZoom>svg>image:active {
-      opacity: 0.8;
-    }
-
-    /* 撤销重做按钮样式 */
-    .undoRedoControls {
-      position: fixed;
-      z-index: 1000;
-      overflow: visible;
-      display: flex;
-      flex-direction: column;
-      border-radius: 4px;
-    }
-
-    .undoRedoButton {
-      background-color: #fff;
-      border: 1px solid #ddd;
-      width: 31px;
-      height: 31px;
-      cursor: pointer;
-      border-radius: 4px;
-      margin-bottom: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-
-    .undoRedoButton img,
-    .undoRedoButton svg {
-      width: 18px;
-      height: 18px;
-      opacity: 0.4;
-    }
-
-    .undoRedoButton:hover {
-      background-color: #f1f1f1;
-    }
-
-    .undoRedoButton:hover img,
-    .undoRedoButton:hover svg {
-      opacity: 0.6;
-    }
-
-    .undoRedoButton:active {
-      background-color: #e0e0e0;
-    }
-
-    .undoRedoButton:active img,
-    .undoRedoButton:active svg {
-      opacity: 0.8;
-    }
-
-    .undoRedoButton[disabled] {
-      cursor: default;
-      background-color: #f8f8f8;
-    }
-
-    .undoRedoButton[disabled] img,
-    .undoRedoButton[disabled] svg {
-      opacity: 0.2;
-    }
-
-    /* 可拖动分隔线样式 */
-    .resizer {
-      width: 4px;
-      height: 100%;
-      background-color: #f0f0f0;
-      cursor: col-resize;
-      transition: background-color 0.2s;
-      user-select: none;
-      z-index: 10;
-      /* 添加z-index确保分隔线不被覆盖 */
-      position: relative;
-      /* 需要设置position才能使z-index生效 */
-    }
-
-    .resizer:hover,
-    .resizer.active {
-      background-color: #007bff;
-      /* 蓝色 */
-    }
-
-    /* 拖动时应用的样式 */
-    .workspace-container.resizing {
-      cursor: col-resize;
-      user-select: none;
-    }
-
-    /* 串口容器样式 */
-    #serialContainer {
-      background-color: #f5f5f5;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      min-height: auto;
-      /* 未连接时高度自适应内容 */
-      max-height: none;
-      /* 移除高度限制 */
-      overflow: hidden;
-    }
-
-    /* 串口连接后应用此样式 */
-    #serialContainer.connected {
-      flex: 4;
-      /* 连接后占据适当比例 */
-      min-height: 180px;
-      /* 连接后确保有足够高度 */
-    }
-
-    /* 串口输出容器 */
-    #serialInterface {
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      height: 100%;
-      width: 100%;
-      max-width: 100%;
-      background-color: #1e1e1e;
-      /* 黑色背景 */
-    }
-
-    /* 修复积木块文字偏移问题 */
-    .blocklyText {
-      fill: #fff;
-      font-family: sans-serif;
-      font-size: 11pt;
-      font-weight: normal;
-    }
-
-    .blocklyNonEditableText>text,
-    .blocklyEditableText>text {
-      fill: #000;
-    }
-
-    .blocklyDropdownText {
-      fill: #000 !important;
-    }
-
-    #loadInput {
-      display: none;
-    }
-
-    /* 控制台区域 */
-    #consoleLog {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: auto;
-      /* 启用水平滚动条 */
-      padding: 10px;
-      background-color: #1e1e1e;
-      color: #fff;
-      font-family: 'Consolas', monospace;
-      font-size: 13px;
-      line-height: 1.4;
-      max-height: 100%;
-      white-space: nowrap;
-      /* 不自动换行 */
-      user-select: text;
-      /* 允许文本选择 */
-      outline: none;
-      /* 移除默认outline */
-    }
-
-    #consoleLog:focus {
-      outline: 1px solid #007bff;
-      /* 获得焦点时显示蓝色outline */
-    }
-
-    /* 区域标题栏样式 */
-    .area-header {
-      margin: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      /* 改为center对齐确保垂直居中 */
-      background-color: #2d2d2d;
-      padding: 8px 10px;
-      border-radius: 0;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      min-height: 36px;
-      /* 确保高度一致 */
-    }
-
-    .area-title {
-      font-weight: 600;
-      color: #fff;
-      font-size: 14px;
-      letter-spacing: 0.5px;
-      line-height: 1.5;
-      /* 保持与按钮文字一致的行高 */
-      margin: 0;
-      padding: 4px 0;
-      /* 添加垂直内边距，使高度与按钮一致 */
-      white-space: nowrap;
-      /* 防止文字换行 */
-      font-family: Arial, sans-serif;
-      /* 确保字体一致 */
-    }
-
-    /* 控制台按钮组 */
-    .area-header .button-group {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      /* 改为居中对齐 */
-      margin-left: auto;
-      /* 添加margin-left:auto使按钮组靠右对齐 */
-    }
-
-    /* 清除按钮和切换按钮的通用样式 */
-    .clear-button,
-    .toggle-button {
-      padding: 4px 8px;
-      cursor: pointer;
-      background-color: #fff;
-      border: none;
-      border-radius: 3px;
-      transition: all 0.2s;
-      font-size: 14px;
-      line-height: 1.5;
-      display: inline-flex;
-      /* 改为inline-flex统一显示 */
-      align-items: center;
-      /* 垂直居中 */
-      justify-content: center;
-      /* 水平居中 */
-      text-align: center;
-      min-height: 28px;
-      /* 设置最小高度确保一致性 */
-      font-family: Arial, sans-serif;
-      box-sizing: border-box;
-      /* 确保padding不影响整体尺寸 */
-      white-space: normal;
-      /* 允许文本自然换行 */
-      max-width: none;
-      /* 移除最大宽度限制 */
-      width: auto;
-      /* 宽度自适应内容 */
-    }
-
-    .clear-button:hover,
-    .toggle-button:hover {
-      background-color: #e9e9e9;
-    }
-
-    .clear-button:active,
-    .toggle-button:active {
-      background-color: #d9d9d9;
-      transform: translateY(1px);
-    }
-
-    /* 切换按钮激活状态 */
-    .toggle-button.active {
-      background-color: #4CAF50;
-      color: white;
-    }
-
-    .toggle-button.active:hover {
-      background-color: #45a049;
-    }
-
-    /* 串口通信相关样式 */
-    #serialContainer {
-      background-color: #f5f5f5;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      min-height: auto;
-      /* 未连接时高度自适应内容 */
-      max-height: none;
-      /* 移除高度限制 */
-      overflow: hidden;
-    }
-
-    /* 串口连接后应用此样式 */
-    #serialContainer.connected {
-      flex: 4;
-      /* 连接后占据适当比例 */
-      min-height: 180px;
-      /* 连接后确保有足够高度 */
-    }
-
-    /* 串口按钮样式保留 */
-    .serial-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 15px;
-      background: #007bff;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      margin: 2px;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.3s;
-      font-family: Arial, sans-serif;
-      white-space: normal;
-      /* 允许文本自然换行 */
-      max-width: none;
-      /* 移除最大宽度限制 */
-      width: auto;
-      /* 宽度自适应内容 */
-    }
-
-    /* 水平分隔线样式 */
-    .horizontal-resizer {
-      width: 100%;
-      height: 4px;
-      background-color: #f0f0f0;
-      cursor: row-resize;
-      transition: background-color 0.2s;
-      user-select: none;
-      margin: 0;
-      display: none;
-      /* 初始隐藏 */
-    }
-
-    .horizontal-resizer:hover,
-    .horizontal-resizer.active {
-      background-color: #007bff;
-      /* 蓝色 */
-    }
-
-    /* 强制按钮右对齐 */
-    #consoleWindow .area-header .button-group,
-    #serialContainer .area-header .button-group {
-      display: flex;
-      justify-content: flex-end;
-      margin-left: auto;
-      align-items: center;
-      /* 确保按钮在同一行中垂直对齐 */
-      flex-wrap: nowrap;
-      /* 防止按钮换行，保持并排 */
-      max-width: 70%;
-      /* 适当增加宽度，容纳多个按钮 */
-    }
-
-    /* 按钮标题栏通用设置 */
-    .area-header .button-group button {
-      margin: 2px;
-      /* 统一间距 */
-      max-width: none;
-      /* 不限制最大宽度 */
-      white-space: normal;
-      /* 允许文本换行 */
-      word-wrap: break-word;
-      /* 允许长单词换行 */
-      line-height: 1.2;
-      /* 紧凑的行高 */
-      font-size: 13px;
-      /* 稍微小一点的字体 */
-      padding: 4px 6px;
-      /* 紧凑的内边距 */
-      text-align: center;
-      /* 文本居中 */
-      height: auto;
-      /* 自适应高度 */
-      min-height: 40px;
-      /* 确保足够高度容纳两行文字 */
-      width: auto;
-      /* 宽度自适应内容 */
-    }
-
-    /* 超小屏幕时进一步调整 */
-    @media screen and (max-width: 576px) {
-
-      .clear-button,
-      .toggle-button {
-        padding: 2px 5px;
-        font-size: 12px;
-        max-width: none;
-        /* 移除最大宽度限制 */
-      }
-    }
-  </style>
+  <!-- 6. 加载 WebSocket 客户端 -->
+  <script src="./js/petoi_async_client.js"></script>
+  <script src="./js/toolbox.js"></script>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 
 <body>
   <div class="header">
     <div class="title" data-i18n="appTitle">Petoi Web Coding Blocks</div>
-    <div class="language-switch">
-      <button id="zhBtn" class="lang-btn" onclick="setLanguage('zh')">中文</button>
-      <button id="enBtn" class="lang-btn active" onclick="setLanguage('en')">English</button>
-      <button id="jaBtn" class="lang-btn" onclick="setLanguage('ja')">日本語</button>
+    <div class="header-right">
+      <div class="version-date" id="versionDate"></div>
+      <div class="language-switch">
+        <button id="zhBtn" class="lang-btn" onclick="setLanguage('zh')">中文</button>
+        <button id="enBtn" class="lang-btn active" onclick="setLanguage('en')">English</button>
+        <button id="jaBtn" class="lang-btn" onclick="setLanguage('ja')">日本語</button>
+      </div>
     </div>
   </div>
   <div class="container">
     <div class="button-group">
       <button onclick="showCode()" data-i18n="showCode">Show Code</button>
       <button onclick="runCode()" data-i18n="runCode">Run Code</button>
+      <button onclick="stopCode()" id="stopCodeBtn" data-i18n="stopCode" style="display: none;">Stop Code</button>
       <button onclick="saveWorkspace()" data-i18n="saveProgram">Save Program</button>
       <button onclick="document.getElementById('loadInput').click()" data-i18n="loadProgram">Load Program</button>
+      <button onclick="triggerSkillFileUpload()" data-i18n="uploadSkills">Upload Skills</button>
+      <input type="file" id="skillFileInput" accept=".md" multiple onchange="handleSkillFilesUpload(this.files)"
+        style="display: none;">
+      <button onclick="generateLog()" data-i18n="generateLog">Generate Log</button>
       <button onclick="clearWorkspace()" data-i18n="clearAll">Clear All</button>
       <input type="file" id="loadInput" accept=".json" onchange="loadWorkspace(this.files[0])">
       <span id="currentFileLabel" data-i18n="currentFileLabel" style="margin-left: 10px; color: #555;"></span>
       <span id="currentFileName" style="color: #555; font-style: italic;"></span>
       <div class="right-aligned-container">
-        <button onclick="quickConnect()" id="quickConnectBtn" disabled data-i18n="quickConnect">Quick Connect</button>
+        <button onclick="quickConnect()" id="quickConnectBtn" data-i18n="quickConnect">Quick Connect</button>
       </div>
     </div>
 
@@ -711,13 +61,22 @@
       <div id="blocklyDiv"></div>
       <div class="resizer" id="divider"></div>
       <div class="windows-container">
+        <div id="skillFilesContainer"
+          style="display: none; margin-bottom: 10px; padding: 10px; background-color: #f5f5f5; border-radius: 4px;">
+          <h4 style="margin: 0 0 10px 0;" data-i18n="uploadedSkills">Uploaded Skills</h4>
+          <div id="skillFilesList" style="max-height: 150px; overflow-y: auto;"></div>
+        </div>
         <div id="consoleWindow">
           <div class="area-header">
             <span class="area-title" data-i18n="consoleLog">Console Log</span>
             <div class="button-group">
+              <button id="showTimestampBtn" onclick="toggleShowTimestamp()" class="toggle-button active"
+                data-i18n="showTimestamp">Timestamp</button>
               <button id="showSentCommandsBtn" onclick="toggleShowSentCommands()" class="toggle-button"
-                data-i18n="showSentCommands">Show Sent Commands</button>
-              <button onclick="clearConsole()" class="clear-button" data-i18n="clearConsole">Clear Log</button>
+                data-i18n="showSentCommands">Show Commands</button>
+              <button id="showDebugBtn" onclick="toggleShowDebug()" class="toggle-button"
+                data-i18n="showDebug">Debug</button>
+              <button onclick="clearConsole()" class="clear-button" data-i18n="clearLog">Clear Log</button>
             </div>
           </div>
           <div id="consoleLog" class="dark-scrollbar"></div>
@@ -731,10 +90,12 @@
             <div class="button-group">
               <button onclick="openSerialPort()" class="serial-button" id="openSerialBtn"
                 data-i18n="serialConnect">Connect Serial Port</button>
-              <button onclick="clearSerialOutput()" class="clear-button" id="clearSerialBtn" style="display: none;"
-                data-i18n="clearDisplay">Clear Display</button>
+              <button id="showSerialTimestampBtn" onclick="toggleShowSerialTimestamp()" class="toggle-button active"
+                style="display: none;" data-i18n="showTimestamp">Timestamp</button>
               <button onclick="closeSerialPort()" class="clear-button" id="closeSerialBtn" style="display: none;"
                 data-i18n="closeSerial">Close Connection</button>
+              <button onclick="clearSerialOutput()" class="clear-button" id="clearSerialBtn" style="display: none;"
+                data-i18n="clearLog">Clear Log</button>
             </div>
           </div>
           <div id="serialInterface" style="display: none;">
@@ -752,301 +113,209 @@
 
   <script>
     // 自定义主题
-    const customTheme = Blockly.Theme.defineTheme('myCustomTheme', {
-      'base': Blockly.Themes.Classic, // 继承经典主题的基础配置
-      'categoryStyles': {
-        'communication_category': {
-          'colour': '#E63946', // 红色
-        },
-        'motion_category': {
-          'colour': '#4361EE', // 蓝色
-        },
-        'control_category': {
-          'colour': '#06D6A0', // 绿色
-        },
-        'sensor_category': {
-          'colour': '#FFB703', // 黄色
-        },
-        'console_category': {
-          'colour': '#9C27B0', // 紫色
-        }
-      }
-    });
-
-    // 全局异步客户端类定义
-    class PetoiAsyncClient
-    {
-      constructor(baseUrl = null)
-      {
-        this.baseUrl = baseUrl || "http://" + window.location.hostname;
-        this.taskTimeout = 10000;
-      }
-
-      async sendCommand(cmd)
-      {
-        try
-        {
-          const response = await fetch(this.baseUrl + "/?cmd=" + encodeURIComponent(cmd));
-
-          // 检查HTTP响应状态
-          if (!response.ok)
-          {
-            throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-          }
-
-          const responseText = await response.text();
-
-          if (responseText.startsWith('TASK_ID:'))
-          {
-            const taskId = responseText.replace('TASK_ID:', '').trim();
-            return await this.waitForCompletion(taskId);
-          } else
-          {
-            // 如果没有任务ID，说明是同步命令，直接返回响应
-            return responseText;
-          }
-        } catch (error)
-        {
-          // 提供更详细的错误信息
-          let errorMsg = getText("commandSendFailed") + ": ";
-
-          if (error.name === 'TypeError' && error.message.includes('Failed to fetch'))
-          {
-            errorMsg += getText("deviceConnectionLost").replace("{ip}", this.baseUrl.replace("http://", ""));
-          }
-          else if (error.message.includes('ERR_CONNECTION_RESET'))
-          {
-            errorMsg += getText("deviceConnectionLost").replace("{ip}", this.baseUrl.replace("http://", ""));
-          }
-          else
-          {
-            errorMsg += error.message;
-          }
-
-          throw new Error(errorMsg);
-        }
-      }
-
-      async waitForCompletion(taskId)
-      {
-        const startTime = Date.now();
-        while (Date.now() - startTime < this.taskTimeout)
-        {
-          try
-          {
-            const response = await fetch(this.baseUrl + "/status?taskId=" + taskId);
-            const status = await response.text();
-
-            if (status.startsWith('completed'))
-            {
-              // 正确处理多行返回数据
-              let result = status;
-              if (status.indexOf('\n') !== -1)
-              {
-                // 如果有换行符，提取completed后的所有内容
-                result = status.substring(status.indexOf('\n') + 1);
-              } else
-              {
-                // 如果没有换行符，可能是单行格式如"completed 4094 R"
-                result = status.substring('completed'.length).trim();
-              }
-              return result;
-            } else if (status.startsWith('error'))
-            {
-              throw new Error(status);
-            } else
-            {
-              // 任务还在运行，等待一下再查询
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          } catch (error)
-          {
-            console.error(getText("taskQueryFailed"), error);
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        }
-        throw new Error(getText("taskTimeout"));
-      }
-    }
-
-    // 全局异步HTTP请求函数
-    function httpRequest(ip, cmd, timeout = 2000, needResponse = true)
-    {
-      return new Promise(async (resolve, reject) =>
-      {
-        // 检查IP是否有效
-        if (!ip || typeof ip !== 'string' || !ip.match(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/))
-        {
-          reject(new Error(getText("invalidIPAddress")));
-          return;
-        }
-
-        try
-        {
-          // 为每个请求创建新的客户端实例，确保使用正确的IP
-          const client = new PetoiAsyncClient("http://" + ip);
-
-          const result = await client.sendCommand(cmd);
-
-          resolve(needResponse ? result : true);
-        } catch (error)
-        {
-          console.error(getText("httpRequestError"), error);
-          reject(error);
-        }
-      });
-    }
-
     // 将函数设为全局可用
-    window.httpRequest = httpRequest;
     window.PetoiAsyncClient = PetoiAsyncClient;
-
-    // 动态创建工具箱配置
-    function createToolbox()
-    {
-      return {
-        kind: 'categoryToolbox',
-        contents: [
-          {
-            kind: 'category',
-            name: getText('categoryLogic'),
-            categorystyle: 'logic_category',
-            contents: [
-              { kind: 'block', type: 'controls_if' },
-              { kind: 'block', type: 'logic_compare' },
-              { kind: 'block', type: 'logic_operation' },
-              { kind: 'block', type: 'logic_negate' },
-              { kind: 'block', type: 'logic_boolean' },
-              { kind: 'block', type: 'logic_null' },
-              { kind: 'block', type: 'logic_ternary' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText('categoryLoops'),
-            categorystyle: 'loop_category',
-            contents: [
-              { kind: 'block', type: 'controls_repeat_ext' },
-              { kind: 'block', type: 'controls_whileUntil' },
-              { kind: 'block', type: 'controls_for' },
-              { kind: 'block', type: 'controls_forEach' },
-              { kind: 'block', type: 'controls_flow_statements' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText('categoryMath'),
-            categorystyle: 'math_category',
-            contents: [
-              { kind: 'block', type: 'math_number' },
-              { kind: 'block', type: 'math_arithmetic' },
-              { kind: 'block', type: 'math_single' },
-              { kind: 'block', type: 'math_trig' },
-              { kind: 'block', type: 'math_constant' },
-              { kind: 'block', type: 'math_number_property' },
-              { kind: 'block', type: 'math_round' },
-              { kind: 'block', type: 'math_modulo' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText('categoryText'),
-            categorystyle: 'text_category',
-            contents: [
-              { kind: 'block', type: 'text' },
-              { kind: 'block', type: 'text_join' },
-              { kind: 'block', type: 'text_append' },
-              { kind: 'block', type: 'text_length' },
-              { kind: 'block', type: 'text_isEmpty' },
-              { kind: 'block', type: 'text_indexOf' },
-              { kind: 'block', type: 'text_charAt' },
-              { kind: 'block', type: 'text_getSubstring' },
-              { kind: 'block', type: 'text_changeCase' },
-              { kind: 'block', type: 'text_trim' },
-              { kind: 'block', type: 'text_print' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText('categoryVariables'),
-            categorystyle: 'variable_category',
-            custom: 'VARIABLE'
-          },
-          {
-            kind: 'category',
-            name: getText('categoryFunctions'),
-            categorystyle: 'procedure_category',
-            custom: 'PROCEDURE'
-          },
-          {
-            kind: 'category',
-            name: getText('categoryCommunication'),
-            categorystyle: 'communication_category',
-            contents: [
-              { kind: 'block', type: 'make_connection' },
-              { kind: 'block', type: 'get_digital_input' },
-              { kind: 'block', type: 'get_analog_input' },
-              { kind: 'block', type: 'set_digital_output' },
-              { kind: 'block', type: 'set_analog_output' },
-              { kind: 'block', type: 'send_custom_command' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText('categoryMotion'),
-            categorystyle: 'motion_category',
-            contents: [
-              { kind: 'block', type: 'gait' },
-              { kind: 'block', type: 'posture' },
-              { kind: 'block', type: 'acrobatic_moves' },
-              { kind: 'block', type: 'set_motor_angle' },
-              { kind: 'block', type: 'get_joint_angle' },
-              { kind: 'block', type: 'get_all_joint_angles' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText("categoryControl"),
-            colour: '#06D6A0',
-            contents: [
-              { kind: 'block', type: 'gyro_control' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText("categoryConsole"),
-            colour: '#9C27B0',
-            contents: [
-              { kind: 'block', type: 'console_log_variable' },
-              { kind: 'block', type: 'delay_ms' }
-            ]
-          },
-          {
-            kind: 'category',
-            name: getText("categoryMusic"),
-            colour: '#FF6B6B',
-            contents: [
-              { kind: 'block', type: 'play_note' }
-            ]
-          }
-        ]
-      };
-    }
 
     // 初始化变量
     var workspace;
 
-    // 保存不同语言的消息对象
-    const zhMessages = {};
-    const enMessages = {};
-
     // 当前语言
     let isChangingLanguage = false;
+    // save entry block ids
+    let startBlockIds = [];
 
     // 新增翻译助手函数
     function getText(key)
     {
       return TRANSLATIONS[currentLang][key] || key;
+    }
+
+    // 获取格式化的时间戳 [HH:MM:SS.mmm]
+    function getFormattedTimestamp()
+    {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+      return `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
+    }
+
+    // 设置版本日期
+    function setVersionDate()
+    {
+      const versionElement = document.getElementById('versionDate');
+      if (versionElement)
+      {
+        // 使用当前日期作为版本日期
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        versionElement.textContent = `v${year}.${month}.${day}`;
+      }
+    }
+
+    // 加载配置文件
+    async function loadConfig()
+    {
+      try
+      {
+        // 首先尝试从localStorage加载配置
+        const localStorageConfig = localStorage.getItem('petoiConfig');
+        if (localStorageConfig)
+        {
+          try
+          {
+            const parsedConfig = JSON.parse(localStorageConfig);
+            config = { ...config, ...parsedConfig };
+            if (typeof showDebug !== 'undefined' && showDebug)
+            {
+              console.log('Configuration loaded from localStorage:', config);
+            }
+            return; // 如果从localStorage成功加载，就不需要从文件加载了
+          } catch (parseError)
+          {
+            console.warn('Failed to parse localStorage config:', parseError);
+            // 如果解析失败，继续尝试从文件加载
+          }
+        }
+
+        // 如果localStorage中没有配置或解析失败，使用默认配置
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log('No localStorage config found, using default configuration');
+        }
+      } catch (error)
+      {
+        console.warn('Failed to load config, using defaults:', error);
+      }
+    }
+
+    // 保存配置文件
+    async function saveConfig()
+    {
+      try
+      {
+        // 更新连接历史
+        if (currentDeviceIP && currentDeviceIP !== config.lastKnownIP)
+        {
+          config.lastKnownIP = currentDeviceIP;
+          config.lastConnectedTime = new Date().toISOString();
+
+          // 添加到连接历史（最多保存10个）
+          if (!config.connectionHistory.includes(currentDeviceIP))
+          {
+            config.connectionHistory.unshift(currentDeviceIP);
+            config.connectionHistory = config.connectionHistory.slice(0, 10);
+          }
+        }
+
+        // 保存到localStorage，这样页面刷新后配置不会丢失
+        try
+        {
+          localStorage.setItem('petoiConfig', JSON.stringify(config));
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log('Configuration saved to localStorage:', config);
+          }
+        } catch (localStorageError)
+        {
+          console.warn('Failed to save to localStorage:', localStorageError);
+        }
+
+        // 注意：由于浏览器安全限制，无法直接写入文件
+        // 这里只是更新内存中的配置，实际保存需要服务器端支持
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log('Configuration updated:', config);
+        }
+      } catch (error)
+      {
+        console.error('Failed to save config:', error);
+      }
+    }
+
+    // 尝试使用配置的IP地址连接
+    async function tryConnectWithConfigIP()
+    {
+      if (!config.lastKnownIP)
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log('No configured IP address available');
+        }
+        return false;
+      }
+
+      // 如果当前IP就是配置的IP，说明已经连接成功，不需要重复连接
+      if (currentDeviceIP === config.lastKnownIP)
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(`Already connected to configured IP: ${config.lastKnownIP}`);
+        }
+
+        // 确保按钮显示正确的IP地址
+        updateQuickConnectButtonState(currentDeviceIP);
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(`Updated Quick Connect button to show IP: ${currentDeviceIP}`);
+        }
+
+        return true;
+      }
+
+      if (typeof showDebug !== 'undefined' && showDebug)
+      {
+        console.log(`Trying to connect with configured IP: ${config.lastKnownIP}`);
+      }
+
+      try
+      {
+        // 尝试使用配置的IP地址创建WebSocket连接
+        const testClient = new PetoiAsyncClient(`ws://${config.lastKnownIP}:81`);
+        await testClient.connect();
+
+        // 如果连接成功，更新当前IP地址
+        currentDeviceIP = config.lastKnownIP;
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(`Successfully connected with configured IP: ${currentDeviceIP}`);
+        }
+
+        // 更新Quick Connect按钮状态
+        updateQuickConnectButtonState(currentDeviceIP);
+
+        // 更新配置中的连接时间并保存
+        config.lastConnectedTime = new Date().toISOString();
+        await saveConfig();
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log('Configuration updated with successful connection:', config);
+        }
+
+        // 更新make_connection积木中的IP地址
+        const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
+        if (makeConnectionBlocks && makeConnectionBlocks.length > 0)
+        {
+          // 更新第一个make_connection积木块的IP_ADDRESS字段
+          makeConnectionBlocks[0].setFieldValue(currentDeviceIP, 'IP_ADDRESS');
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log(`Updated make_connection block IP to: ${currentDeviceIP}`);
+          }
+        }
+
+        return true;
+      } catch (error)
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(`Failed to connect with configured IP ${config.lastKnownIP}:`, error);
+        }
+        return false;
+      }
     }
 
     // 更新自定义积木的定义
@@ -1076,6 +345,7 @@
           block.type === 'set_digital_output' ||
           block.type === 'set_analog_output' ||
           block.type === 'send_custom_command' ||
+          block.type === 'console_input' ||
           block.type === 'delay_ms' ||
           block.type === 'posture' ||
           block.type === 'gait' ||
@@ -1201,618 +471,6 @@
           }
         }
       }
-
-      // 通信积木
-      if (Blockly.Blocks['make_connection'])
-      {
-        Blockly.Blocks['make_connection'].init = function ()
-        {
-          this.jsonInit({
-            "type": "make_connection",
-            "message0": getText("connectWithIP"),
-            "args0": [
-              {
-                "type": "field_input",
-                "name": "IP_ADDRESS",
-                "text": currentDeviceIP || "192.168.4.1"
-              }
-            ],
-            "nextStatement": null,
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": "",
-            "helpUrl": ""
-          });
-        };
-      }
-
-      // 数字输入积木
-      if (Blockly.Blocks['get_digital_input'])
-      {
-        Blockly.Blocks['get_digital_input'].init = function ()
-        {
-          this.jsonInit({
-            "type": "get_digital_input",
-            "message0": getText("getDigitalInput"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "PIN",
-                "options": [
-                  ["34", "34"],
-                  ["35", "35"],
-                  ["36", "36"],
-                  ["39", "39"],
-                  ["BackTouch(38)", "38"],
-                  ["Rx2(9)", "9"],
-                  ["Tx2(10)", "10"]
-                ]
-              }
-            ],
-            "output": true,
-            "outputType": "Number",
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 模拟输入积木
-      if (Blockly.Blocks['get_analog_input'])
-      {
-        Blockly.Blocks['get_analog_input'].init = function ()
-        {
-          this.jsonInit({
-            "type": "get_analog_input",
-            "message0": getText("getAnalogInput"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "PIN",
-                "options": [
-                  ["34", "34"],
-                  ["35", "35"],
-                  ["36", "36"],
-                  ["39", "39"],
-                  ["BackTouch(38)", "38"],
-                  ["Rx2(9)", "9"],
-                  ["Tx2(10)", "10"]
-                ]
-              }
-            ],
-            "output": true,
-            "outputType": "Number",
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 传感器输入积木
-      if (Blockly.Blocks['get_sensor_input'])
-      {
-        Blockly.Blocks['get_sensor_input'].init = function ()
-        {
-          this.jsonInit({
-            "type": "get_sensor_input",
-            "message0": getText("getSensorInput"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "SENSOR",
-                "options": [
-                  [getText("ultrasonic"), "ultrasonic"],
-                  [getText("touch"), "touch"],
-                  [getText("distance"), "distance"],
-                  [getText("light"), "light"],
-                  [getText("temperature"), "temperature"],
-                  [getText("humidity"), "humidity"]
-                ]
-              }
-            ],
-            "output": true,
-            "outputType": "Number",
-            "colour": '#FFB703', // 传感器积木：黄色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 数字输出积木
-      if (Blockly.Blocks['set_digital_output'])
-      {
-        Blockly.Blocks['set_digital_output'].init = function ()
-        {
-          this.jsonInit({
-            "type": "set_digital_output",
-            "message0": getText("setDigitalOutput"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "PIN",
-                "options": [
-                  ["25", "25"],
-                  ["26", "26"],
-                  ["27", "27"],
-                  ["14", "14"],
-                  ["12", "12"],
-                  ["13", "13"]
-                ]
-              },
-              {
-                "type": "field_dropdown",
-                "name": "STATE",
-                "options": [
-                  ["HIGH", "1"],
-                  ["LOW", "0"]
-                ]
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 模拟输出积木
-      if (Blockly.Blocks['set_analog_output'])
-      {
-        Blockly.Blocks['set_analog_output'].init = function ()
-        {
-          this.jsonInit({
-            "type": "set_analog_output",
-            "message0": getText("setAnalogOutput"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "PIN",
-                "options": [
-                  ["25", "25"],
-                  ["26", "26"]
-                ]
-              },
-              {
-                "type": "field_number",
-                "name": "VALUE",
-                "value": 128,
-                "min": 0,
-                "max": 255
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 自定义命令积木
-      if (Blockly.Blocks['send_custom_command'])
-      {
-        Blockly.Blocks['send_custom_command'].init = function ()
-        {
-          this.jsonInit({
-            "type": "send_custom_command",
-            "message0": getText("sendCustomCommand"),
-            "args0": [
-              {
-                "type": "field_input",
-                "name": "COMMAND",
-                "text": ""
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#E63946', // 通信积木：红色
-            "tooltip": ""
-          });
-        };
-      }
-
-
-
-      // 本地动作积木
-      if (Blockly.Blocks['local_action'])
-      {
-        Blockly.Blocks['local_action'].init = function ()
-        {
-          this.jsonInit({
-            "type": "local_action",
-            "message0": getText("localAction"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "COMMAND",
-                "options": [
-                  [getText("stand"), "kup"],
-                  [getText("sit"), "ksit"],
-                  [getText("rest"), "d"],
-                  [getText("pee"), "kpee"]
-                ]
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#4361EE', // 动作积木：蓝色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 高难度动作积木
-      if (Blockly.Blocks['high_difficulty_action'])
-      {
-        Blockly.Blocks['high_difficulty_action'].init = function ()
-        {
-          this.jsonInit({
-            "type": "high_difficulty_action",
-            "message0": getText("highDifficultyAction"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "COMMAND",
-                "options": [
-                  [getText("jump"), "kjmp"],
-                  [getText("backflip"), "kbkF"],
-                  [getText("roll"), "kroll"],
-                  [getText("rotate"), "krot"]
-                ]
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#4361EE', // 动作积木：蓝色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 设置马达角度积木
-      if (Blockly.Blocks['set_motor_angle'])
-      {
-        delete Blockly.Blocks['set_motor_angle'];
-      }
-
-      Blockly.Blocks['set_motor_angle'] = {
-        init: function ()
-        {
-          var jointLabel = getText("setJointLabel");
-          var angleLabel = getText("angleTo");
-          var delayLabel = getText("thenDelay");
-          var unitLabel = getText("secUnit");
-
-          this.appendDummyInput()
-            .appendField(jointLabel)
-            .appendField(new Blockly.FieldDropdown([
-              [getText("jointHeadPanning"), "0"],
-              [getText("jointHeadTiltingNybble"), "1"],
-              [getText("jointTailNybble"), "2"],
-              [getText("jointReserved"), "3"],
-              [getText("jointLFArm"), "8"],
-              [getText("jointRFArm"), "9"],
-              [getText("jointRBArm"), "10"],
-              [getText("jointLBArm"), "11"],
-              [getText("jointLFKnee"), "12"],
-              [getText("jointRFKnee"), "13"],
-              [getText("jointRBKnee"), "14"],
-              [getText("jointLBKnee"), "15"],
-            ]), "MOTOR")
-            .appendField(angleLabel)
-            .appendField(new Blockly.FieldNumber(0, -125, 125), "ANGLE");
-          this.appendDummyInput()
-            .appendField(delayLabel)
-            .appendField(new Blockly.FieldNumber(0, 0, 10, 0.01), "DELAY")
-            .appendField(unitLabel);
-          this.setInputsInline(true);
-          this.setPreviousStatement(true, null);
-          this.setNextStatement(true, null);
-          this.setColour('#4361EE');
-        }
-      };
-
-      // 获取舵机角度积木
-      if (Blockly.Blocks['get_joint_angle'])
-      {
-        Blockly.Blocks['get_joint_angle'].init = function ()
-        {
-          this.jsonInit({
-            "type": "get_joint_angle",
-            "message0": getText("getJointAngle"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "JOINT",
-                "options": [
-                  [getText("jointHeadPanning"), "0"],
-                  [getText("jointHeadTiltingNybble"), "1"],
-                  [getText("jointTailNybble"), "2"],
-                  [getText("jointReserved"), "3"],
-                  [getText("jointLFArm"), "8"],
-                  [getText("jointRFArm"), "9"],
-                  [getText("jointRBArm"), "10"],
-                  [getText("jointLBArm"), "11"],
-                  [getText("jointLFKnee"), "12"],
-                  [getText("jointRFKnee"), "13"],
-                  [getText("jointRBKnee"), "14"],
-                  [getText("jointLBKnee"), "15"],
-                ]
-              }
-            ],
-            "output": true,
-            "outputType": "Number",
-            "colour": '#4361EE', // 动作积木：蓝色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 获取所有舵机角度积木
-      if (Blockly.Blocks['get_all_joint_angles'])
-      {
-        Blockly.Blocks['get_all_joint_angles'].init = function ()
-        {
-          this.jsonInit({
-            "type": "get_all_joint_angles",
-            "message0": getText("getAllJointAngles"),
-            "output": true,
-            "outputType": "Array",
-            "colour": '#4361EE', // 动作积木：蓝色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 延时积木
-      if (Blockly.Blocks['delay_ms'])
-      {
-        Blockly.Blocks['delay_ms'].init = function ()
-        {
-          this.jsonInit({
-            "type": "delay_ms",
-            "message0": getText("delayMs"),
-            "args0": [
-              {
-                "type": "field_number",
-                "name": "DELAY",
-                "value": 1,
-                "min": 0
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#9C27B0', // 控制台积木：紫色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 陀螺仪控制积木
-      if (Blockly.Blocks['gyro_control'])
-      {
-        Blockly.Blocks['gyro_control'].init = function ()
-        {
-          this.jsonInit({
-            "type": "gyro_control",
-            "message0": getText("gyroControl"),
-            "args0": [
-              {
-                "type": "field_dropdown",
-                "name": "STATE",
-                "options": [
-                  [getText("gyroEnable"), "1"],
-                  [getText("gyroDisable"), "0"]
-                ]
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#FFB703', // 传感器积木：黄色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 控制台输出积木
-      if (Blockly.Blocks['console_log_variable'])
-      {
-        Blockly.Blocks['console_log_variable'].init = function ()
-        {
-          this.jsonInit({
-            "type": "console_log_variable",
-            "message0": getText("consoleLogVariable"),
-            "args0": [
-              {
-                "type": "input_value",
-                "name": "VARIABLE"
-              }
-            ],
-            "previousStatement": null,
-            "nextStatement": null,
-            "colour": '#9C27B0', // 控制台积木：紫色
-            "tooltip": ""
-          });
-        };
-      }
-
-      // 音乐积木
-      if (Blockly.Blocks['play_note'])
-      {
-        delete Blockly.Blocks['play_note'];
-      }
-
-      Blockly.Blocks['play_note'] = {
-        init: function ()
-        {
-          var noteLabel = getText("playNote");
-          var durationLabel = getText("forDuration");
-          var beatLabel = getText("beatUnit");
-
-          var noteOptions = [
-            [getText("noteRest"), "0"],
-            [getText("noteLowC"), "8"],
-            [getText("noteLowCSharp"), "9"],
-            [getText("noteLowD"), "10"],
-            [getText("noteLowDSharp"), "11"],
-            [getText("noteLowE"), "12"],
-            [getText("noteLowF"), "13"],
-            [getText("noteLowFSharp"), "14"],
-            [getText("noteLowG"), "15"],
-            [getText("noteLowGSharp"), "16"],
-            [getText("noteLowA"), "17"],
-            [getText("noteLowASharp"), "18"],
-            [getText("noteLowB"), "19"],
-            [getText("noteMiddleC"), "20"],
-            [getText("noteMiddleCSharp"), "21"],
-            [getText("noteMiddleD"), "22"],
-            [getText("noteMiddleDSharp"), "23"],
-            [getText("noteMiddleE"), "24"],
-            [getText("noteMiddleF"), "25"],
-            [getText("noteMiddleFSharp"), "26"],
-            [getText("noteMiddleG"), "27"],
-            [getText("noteMiddleGSharp"), "28"],
-            [getText("noteMiddleA"), "29"],
-            [getText("noteMiddleASharp"), "30"],
-            [getText("noteMiddleB"), "31"],
-            [getText("noteHighC"), "32"]
-          ];
-
-          var durationOptions = [
-            ["1", "1"],
-            ["1/2", "2"],
-            ["1/4", "4"],
-            ["1/8", "8"],
-            ["1/16", "16"]
-          ];
-
-          this.appendDummyInput()
-            .appendField(noteLabel)
-            .appendField(new Blockly.FieldDropdown(noteOptions), "NOTE")
-            .appendField(durationLabel)
-            .appendField(new Blockly.FieldDropdown(durationOptions), "DURATION")
-            .appendField(beatLabel);
-          this.setInputsInline(true);
-          this.setPreviousStatement(true, null);
-          this.setNextStatement(true, null);
-          this.setColour('#FF6B6B'); // 音乐积木：红色
-        }
-      };
-
-      // 步态动作积木
-      if (Blockly.Blocks['gait'])
-      {
-        delete Blockly.Blocks['gait'];
-      }
-
-      Blockly.Blocks['gait'] = {
-        init: function ()
-        {
-          var gaitLabel = getText("gaitLabel");
-          var delayLabel = getText("thenDelay");
-          var unitLabel = getText("secUnit");
-          var options = [
-            [getText("gaitStep"), "kvtF"],
-            [getText("gaitRotateLeft"), "kvtL"],
-            [getText("gaitRotateRight"), "kvtR"],
-            [getText("gaitWalkForward"), "kwkF"],
-            [getText("gaitWalkLeft"), "kwkL"],
-            [getText("gaitWalkRight"), "kwkR"],
-            [getText("gaitWalkBackward"), "kbkF"],
-            [getText("gaitBackLeft"), "kbkL"],
-            [getText("gaitBackRight"), "kbkR"],
-            [getText("gaitTrotForward"), "ktrF"],
-            [getText("gaitTrotLeft"), "ktrL"],
-            [getText("gaitTrotRight"), "ktrR"],
-            [getText("gaitCrawlForward"), "kcrF"],
-            [getText("gaitCrawlLeft"), "kcrL"],
-            [getText("gaitCrawlRight"), "kcrR"],
-            [getText("gaitGapForward"), "kgpF"],
-            [getText("gaitGapLeft"), "kgpL"],
-            [getText("gaitGapRight"), "kgpR"],
-            [getText("gaitMoonwalk"), "kmw"]
-          ];
-
-          this.appendDummyInput()
-            .appendField(gaitLabel)
-            .appendField(new Blockly.FieldDropdown(options), "COMMAND");
-          this.appendDummyInput()
-            .appendField(delayLabel)
-            .appendField(new Blockly.FieldNumber(1, 0, 10, 0.01), "DELAY")
-            .appendField(unitLabel);
-          this.setInputsInline(true);
-          this.setPreviousStatement(true, null);
-          this.setNextStatement(true, null);
-          this.setColour('#4361EE');
-        }
-      };
-
-      // 姿势动作积木
-      if (Blockly.Blocks['posture'])
-      {
-        delete Blockly.Blocks['posture'];
-      }
-
-      Blockly.Blocks['posture'] = {
-        init: function ()
-        {
-          var postureLabel = getText("postureLabel");
-          var delayLabel = getText("thenDelay");
-          var unitLabel = getText("secUnit");
-          var options = [
-            [getText("postureStand"), "kup"],
-            [getText("postureSit"), "ksit"],
-            [getText("postureRest"), "d"],
-            [getText("posturePee"), "kpee"]
-          ];
-
-          this.appendDummyInput()
-            .appendField(postureLabel)
-            .appendField(new Blockly.FieldDropdown(options), "COMMAND");
-          this.appendDummyInput()
-            .appendField(delayLabel)
-            .appendField(new Blockly.FieldNumber(0, 0, 10, 0.01), "DELAY")
-            .appendField(unitLabel);
-          this.setInputsInline(true);
-          this.setPreviousStatement(true, null);
-          this.setNextStatement(true, null);
-          this.setColour('#4361EE');
-        }
-      };
-
-      // 杂技动作积木
-      if (Blockly.Blocks['acrobatic_moves'])
-      {
-        delete Blockly.Blocks['acrobatic_moves'];
-      }
-
-      Blockly.Blocks['acrobatic_moves'] = {
-        init: function ()
-        {
-          var moveLabel = getText("acrobaticMovesLabel");
-          var delayLabel = getText("thenDelay");
-          var unitLabel = getText("secUnit");
-          var options = [
-            [getText("acrobaticHandstand"), "khds"],
-            [getText("acrobaticBoxing"), "kbx"],
-            [getText("acrobaticBackflip"), "kflipB"],
-            [getText("acrobaticFrontflip"), "kflipF"],
-            [getText("acrobaticJump"), "kjmp"]
-          ];
-
-          this.appendDummyInput()
-            .appendField(moveLabel)
-            .appendField(new Blockly.FieldDropdown(options), "COMMAND");
-          this.appendDummyInput()
-            .appendField(delayLabel)
-            .appendField(new Blockly.FieldNumber(0, 0, 10, 0.01), "DELAY")
-            .appendField(unitLabel);
-          this.setInputsInline(true);
-          this.setPreviousStatement(true, null);
-          this.setNextStatement(true, null);
-          this.setColour('#4361EE');
-        }
-      };
     }
 
     // 保存当前工作区的积木
@@ -1825,6 +483,36 @@
     function restoreWorkspace(state)
     {
       Blockly.serialization.workspaces.load(state, workspace);
+    }
+
+    function initWorkspace()
+    {
+      // 创建新的工具箱配置，确保使用新语言
+      blocklyGlobalConfig();
+      const newToolbox = createToolbox();
+      workspace = Blockly.inject('blocklyDiv', {
+        media: './node_modules/blockly/media/',
+        toolbox: newToolbox,
+        theme: customTheme,
+        grid: {
+          spacing: 20,
+          length: 3,
+          colour: '#ccc',
+          snap: true
+        },
+        zoom: {
+          controls: true,
+          wheel: true,
+          startScale: 1.0,
+          maxScale: 3,
+          minScale: 0.3,
+          scaleSpeed: 1.2
+        },
+        trashcan: true
+      });
+
+      // 监听工作区变化事件
+      workspace.addChangeListener(handleWorkspaceEvent);
     }
 
     // 切换语言
@@ -1847,34 +535,10 @@
         // 设置当前语言
         currentLang = lang;
 
-        // 更新自定义积木的定义
-        updateCustomBlockDefinitions();
-
-        // 创建新的工具箱配置，确保使用新语言
-        const newToolbox = createToolbox();
-
         // 重新注入工作区
         workspace.dispose();
-        workspace = Blockly.inject('blocklyDiv', {
-          media: './node_modules/blockly/media/',
-          toolbox: newToolbox,
-          theme: customTheme,
-          grid: {
-            spacing: 20,
-            length: 3,
-            colour: '#ccc',
-            snap: true
-          },
-          zoom: {
-            controls: true,
-            wheel: true,
-            startScale: 1.0,
-            maxScale: 3,
-            minScale: 0.3,
-            scaleSpeed: 1.2
-          },
-          trashcan: true
-        });
+
+        initWorkspace();
 
         // 恢复工作区状态
         restoreWorkspace(workspaceState);
@@ -1901,33 +565,16 @@
         // 设置当前语言为英文
         currentLang = 'en';
 
+        initWorkspace();
+
         // 初始化自定义积木
         updateCustomBlockDefinitions();
 
-        // 使用带有翻译的工具箱初始化工作区
-        workspace = Blockly.inject('blocklyDiv', {
-          media: './node_modules/blockly/media/',
-          toolbox: createToolbox(),
-          theme: customTheme,
-          grid: {
-            spacing: 20,
-            length: 3,
-            colour: '#ccc',
-            snap: true
-          },
-          zoom: {
-            controls: true,
-            wheel: true,
-            startScale: 1.0,
-            maxScale: 3,
-            minScale: 0.3,
-            scaleSpeed: 1.2
-          },
-          trashcan: true
-        });
-
         // 更新UI文本
         updateUIText();
+
+        // 设置版本日期
+        setVersionDate();
 
         if (typeof window.updateUITranslations === 'function')
         {
@@ -1949,39 +596,17 @@
 
         // 初始调整工作区大小
         resizeBlocklyWorkspace();
-
-        // 添加默认的connect with IP积木块
-        addDefaultConnectionBlock();
-
-        // 监听工作区变化事件
-        workspace.addChangeListener(function (event)
-        {
-          // 当工作区被清空时，添加默认积木块
-          if (event.type === Blockly.Events.FINISHED_LOADING ||
-            (event.type === Blockly.Events.DELETE && workspace.getAllBlocks().length === 0))
-          {
-            addDefaultConnectionBlock();
-          }
-
-          // 更新撤销和重做按钮状态
-          updateUndoRedoState();
-        });
-
         // 添加撤销和重做按钮
         addUndoRedoButtons();
+        resetWorkspace();
 
         // 更新按钮状态
         document.getElementById('zhBtn').classList.toggle('active', false);
         document.getElementById('enBtn').classList.toggle('active', true);
         document.getElementById('jaBtn').classList.toggle('active', false);
-      });
 
-      // 加载默认语言积木
-      loadLanguageFile('en', function ()
-      {
-        // 工作区已在DOMContentLoaded事件中初始化
-        // 翻译UI
-        updateUIText();
+        // 加载配置文件
+        loadConfig();
       });
 
       // 添加控制台和串口输出区域的键盘复制功能
@@ -2002,7 +627,7 @@
             {
               navigator.clipboard.writeText(selectedText)
                 .then(() => {/* 移除复制成功消息 */ })
-                .catch(err => console.error('复制失败:', err));
+                .catch(err => console.error(getText("copyFailed"), err));
             }
           }
         });
@@ -2028,7 +653,7 @@
             {
               navigator.clipboard.writeText(selectedText)
                 .then(() => {/* 移除复制成功消息 */ })
-                .catch(err => console.error('复制失败:', err));
+                .catch(err => console.error(getText("copyFailed"), err));
             }
           }
         });
@@ -2042,8 +667,22 @@
 
       // 初始化复制功能
       setupCopyKeyboardShortcuts();
+
+      // 移除旧的checkbox事件监听器，现在使用按钮点击事件
     });
 
+    function handleWorkspaceEvent(event)
+    {
+      // console.log('workspace event', event);
+      // 当工作区被清空时，添加默认积木块
+      if (event.type === Blockly.Events.FINISHED_LOADING)
+      {
+        resetWorkspace();
+      }
+
+      // 更新撤销和重做按钮状态
+      updateUndoRedoState();
+    }
     // 添加动态加载语言文件的辅助函数
     function loadLanguageFile(lang, callback)
     {
@@ -2095,6 +734,29 @@
       } else if (currentFileNameSpan)
       {
         currentFileNameSpan.textContent = '';
+      }
+
+      // 如果串口已连接，更新串口监视器标题以保持端口信息
+      if (port)
+      {
+        const serialTitle = document.getElementById('serialOutputTitle');
+        if (serialTitle)
+        {
+          const displayName = getSerialPortDisplayName(port);
+          serialTitle.textContent = getText("serialMonitorTitle").replace("{portName}", displayName);
+        }
+      }
+
+      // 更新timestamp按钮的翻译文本
+      const timestampBtn = document.getElementById('showTimestampBtn');
+      const serialTimestampBtn = document.getElementById('showSerialTimestampBtn');
+      if (timestampBtn)
+      {
+        timestampBtn.textContent = getText("showTimestamp");
+      }
+      if (serialTimestampBtn)
+      {
+        serialTimestampBtn.textContent = getText("showTimestamp");
       }
     }
 
@@ -2151,11 +813,11 @@
     // 添加默认的connect with IP积木块
     function addDefaultConnectionBlock()
     {
-      // 只有当工作区为空时才添加默认积木
-      if (workspace.getAllBlocks().length === 0)
+      // 只有当工作区不存在startBlockId时才添加默认积木
+      if (startBlockIds.length == 0)
       {
         // 创建make_connection积木块
-        var connectionBlock = workspace.newBlock('make_connection');
+        const connectionBlock = workspace.newBlock('make_connection');
         // 设置IP地址为当前设备IP
         connectionBlock.setFieldValue(currentDeviceIP, 'IP_ADDRESS');
         // 初始化积木块(确保所有连接点正确设置)
@@ -2164,15 +826,44 @@
         connectionBlock.render();
         // 将积木块移动到合适的位置
         connectionBlock.moveBy(50, 50);
+
+        // init gyro_control block, set gyro_control block to disable, connect gyro_control block to connection block
+        const gyroControlBlock = workspace.newBlock('gyro_control');
+        gyroControlBlock.setFieldValue("0", 'STATE');
+        gyroControlBlock.initSvg();
+        gyroControlBlock.render();
+        gyroControlBlock.moveBy(50, 50);
+        connectionBlock.nextConnection.connect(gyroControlBlock.previousConnection);
+        connectionBlock.setDeletable(false);
+        gyroControlBlock.setDeletable(false);
+        workspace.clearUndo();
+        startBlockIds.push(connectionBlock.id);
+        startBlockIds.push(gyroControlBlock.id);
       }
     }
 
     // 添加清空工作区的函数
     function clearWorkspace()
     {
-      workspace.clear();
-      // 清空后自动添加默认连接积木
+      //delete all blocks except make_connection and gyro_control
+      const blocksToDelete = workspace.getAllBlocks().filter(block => !startBlockIds.includes(block.id));
+      blocksToDelete.forEach(block =>
+      {
+        try
+        {
+          block.dispose();
+        } catch (e)
+        {
+        }
+      });
+      updateUndoRedoState();
+    }
+
+    function resetWorkspace()
+    {
       addDefaultConnectionBlock();
+      // workspace.clearUndo();
+      updateUndoRedoState();
     }
 
     function showCode()
@@ -2338,80 +1029,261 @@
       document.addEventListener('keydown', handleEscKey);
     }
 
+    // 防抖变量
+    let lastRunCodeTime = 0;
+    let programStartTime = 0; // 程序启动时间
+    let isProgramRunning = false;
+    let stopExecution = false; // 全局停止标志
+
+    // IP地址格式验证函数
+    function isValidIPAddress(ip)
+    {
+      if (!ip || typeof ip !== 'string')
+      {
+        return false;
+      }
+
+      // 检查是否为192.168.4.1
+      if (ip === '192.168.4.1')
+      {
+        return false; // 返回false表示需要quick connect
+      }
+
+      // 检查IP地址格式
+      const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      return ipRegex.test(ip);
+    }
+
     function runCode()
     {
+      const now = Date.now();
+
+      // 防抖检查：如果距离上次程序结束小于1秒，则不执行
+      if (now - lastRunCodeTime < 1000)
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("debounceTimeInterval"));
+        }
+        return;
+      }
+
+      // 检查程序是否正在运行
+      if (isProgramRunning)
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("debounceProgramRunning"));
+        }
+        return;
+      }
+
+      // 获取积木中的IP地址
+      const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
+      let blockIP = '192.168.4.1'; // 默认IP
+
+      if (makeConnectionBlocks.length > 0)
+      {
+        const mainBlock = makeConnectionBlocks[0];
+        blockIP = mainBlock.getFieldValue('IP_ADDRESS') || '192.168.4.1';
+      }
+
+      // 检查积木中的IP地址是否需要自动执行quick connect
+      if (!isValidIPAddress(blockIP))
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("detectedInvalidIP").replace('{ip}', blockIP));
+        }
+        quickConnect().then(() =>
+        {
+          // quick connect完成后，延迟1秒再执行runCode
+          setTimeout(() =>
+          {
+            executeRunCode();
+          }, 1000);
+        }).catch((error) =>
+        {
+          console.error("Quick connect失败:", error);
+          // 即使quick connect失败，也尝试执行runCode
+          executeRunCode();
+        });
+        return;
+      }
+
+      // 直接执行runCode
+      executeRunCode();
+    }
+
+    function stopCode()
+    {
+      if (isProgramRunning)
+      {
+        const now = Date.now();
+
+        // 防抖检查：如果距离程序启动小于1秒，则不执行停止
+        if (now - programStartTime < 1000)
+        {
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log(getText("stopDebounceTimeInterval") || "Stop button debounce: Please wait at least 1 second after program start");
+          }
+          return;
+        }
+
+        stopExecution = true;
+        console.log(getText("stopRequested"));
+
+        // 清理控制台输入界面
+        if (typeof clearConsoleInput === 'function')
+        {
+          clearConsoleInput();
+        }
+      }
+    }
+
+    function executeRunCode()
+    {
+      const now = Date.now();
+      programStartTime = now; // 记录程序启动时间
+      isProgramRunning = true;
+      stopExecution = false; // 重置停止标志
+
+      // 显示停止按钮，隐藏运行按钮，并设置停止按钮为红色背景
+      const stopBtn = document.getElementById('stopCodeBtn');
+      stopBtn.style.display = 'inline-block';
+      stopBtn.style.backgroundColor = '#ff4444';
+      stopBtn.style.color = 'white';
+      document.querySelector('button[onclick="runCode()"]').style.display = 'none';
+
+      console.log(getText("programExecutionStarted"));
+
       window.LoopTrap = 1000;
       Blockly.JavaScript.INFINITE_LOOP_TRAP =
         'if (--window.LoopTrap < 0) throw "无限循环";\n';
 
-      // 修改：查找工作区中的'make_connection'积木块（Connect with IP）
+      // 查找工作区中的'make_connection'积木块（Connect with IP）
       const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
 
-      // 如果没有找到make_connection积木块，显示错误信息
       if (makeConnectionBlocks.length === 0)
       {
         console.error(getText("noConnectionBlockError") || "错误：请添加一个'Connect with IP'积木块并将代码连接在其下方！");
         alert(getText("noConnectionBlockError") || "错误：请添加一个'Connect with IP'积木块并将代码连接在其下方！");
+        isProgramRunning = false;
         return;
       }
 
-      // 如果找到多个make_connection积木块，使用第一个
       const mainBlock = makeConnectionBlocks[0];
-
-      // 准备一个临时的工作区，只包含我们要运行的代码
       const tempWorkspace = new Blockly.Workspace();
-
-      // 复制主块及其所有连接的块到临时工作区
-      // 先克隆主块
       const clonedMainBlock = Blockly.serialization.blocks.save(mainBlock);
       Blockly.serialization.blocks.append(clonedMainBlock, tempWorkspace);
-
-      // 生成临时工作区的代码
       var code = Blockly.JavaScript.workspaceToCode(tempWorkspace);
-
-      // 清理临时工作区
       tempWorkspace.dispose();
-
       Blockly.JavaScript.INFINITE_LOOP_TRAP = null;
 
-      // 添加辅助函数确保异步操作按顺序执行
-      const asyncHelper = `
-          // 辅助函数，确保异步打印能够立即执行
-          function asyncLog(message) {
-            return new Promise((resolve) => {
-              console.log(message);
-              // 强制浏览器更新DOM
-              setTimeout(resolve, 0);
-            });
-          }
-
-        // 注意：httpRequest和PetoiAsyncClient已在全局定义，无需重复定义
-        `;
-
-      // 将普通的console.log替换为使用asyncLog的形式
+      // 替换所有 console.log 为 asyncLog
       code = code.replace(/console\.log\((.*?)\);/g, 'await asyncLog($1);');
 
       // 包装整个代码到一个异步函数中
-      code = asyncHelper + "\n(async function() {\n" + code + "\n" +
-        "try {\n" +
-        "  // 程序结束时自动发送休息指令'd'\n" +
-        "  if(currentDeviceIP) {\n" +
-        "    await asyncLog(getText('programEndingRestCommand'));\n" +
-        "    await httpRequest(currentDeviceIP, 'd', 2000, true);\n" +
-        "  }\n" +
-        "} catch(e) {\n" +
-        "  console.error(getText('restCommandFailed') + e.message);\n" +
-        "}\n" +
-        "console.log(getText('taskEnded'));" + // 添加任务结束消息
-        "\n})().catch(e => { console.error(getText('networkRequestError') + ': ' + e.message); alert(getText('networkRequestError') + ': ' + e.message); });";
+      const runCodeBlock = `
+function asyncLog(message) {
+  return new Promise((resolve) => {
+    console.log(message);
+    setTimeout(resolve, 0);
+  });
+}
 
+// 检查停止标志的函数
+function checkStopExecution() {
+  if (stopExecution) {
+    throw new Error("程序执行被用户停止");
+  }
+}
+
+// 改进的循环停止检查函数
+function checkStopExecutionInLoop() {
+  if (stopExecution) {
+    throw new Error("程序执行被用户停止");
+  }
+  // 给其他任务执行的机会，包括停止检查
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+(async function () {
+  try {
+    checkStopExecution();
+    
+${code}
+
+    checkStopExecution();
+    // 程序结束时自动发送休息指令'd'
+    await asyncLog(getText("programEndingRestCommand"));
+    await webRequest("d", 5000, true);
+  } catch (e) {
+    if (e.message === "程序执行被用户停止") {
+      // 只在catch块中打印一次停止消息，避免重复
+      await asyncLog(getText("programExecutionStopped"));
+      // 程序被用户停止时，立即发送休息指令'd'（在关闭连接之前）
+      try {
+        await asyncLog(getText("programEndingRestCommand"));
+        await webRequest("d", 5000, true, null, true); // 绕过停止标志检查
+        console.log("Rest command sent successfully");
+      } catch (restError) {
+        console.error(getText("restCommandFailed") + restError.message);
+      }
+    } else {
+      console.error(getText("restCommandFailed") + e.message);
+    }
+  }
+  await closeConnection();
+  console.log(getText("taskEnded"));
+})().catch((e) => {
+  if (e.message === "程序执行被用户停止") {
+    // 停止消息已在try-catch中处理，这里不需要重复打印
+    // console.log(getText("programExecutionStopped"));
+  } else {
+    console.error(getText("networkRequestError") + ": " + e.message);
+    alert(getText("networkRequestError") + ": " + e.message);
+  }
+}).finally(() => {
+  // 程序执行完成后，重置运行状态
+  isProgramRunning = false;
+  stopExecution = false;
+  
+  // 记录程序结束时间，用于防抖
+  lastRunCodeTime = Date.now();
+  
+  // 隐藏停止按钮，显示运行按钮，并重置停止按钮样式
+  const stopBtn = document.getElementById('stopCodeBtn');
+  stopBtn.style.display = 'none';
+  stopBtn.style.backgroundColor = '';
+  stopBtn.style.color = '';
+  document.querySelector('button[onclick="runCode()"]').style.display = 'inline-block';
+  
+  // 清理控制台输入界面
+  if (typeof clearConsoleInput === 'function') {
+    clearConsoleInput();
+  }
+  
+  console.log(getText("programExecutionCompleted"));
+});
+`
       try
       {
-        eval(code);
+        eval(runCodeBlock);
       } catch (e)
       {
+        console.info("code:");
+        console.info(runCodeBlock);
         console.error(getText("networkRequestError") + ": " + e.message);
         alert(getText("networkRequestError") + ": " + e.message);
+        // 发生错误时也要重置运行状态和按钮样式
+        isProgramRunning = false;
+        const stopBtn = document.getElementById('stopCodeBtn');
+        stopBtn.style.display = 'none';
+        stopBtn.style.backgroundColor = '';
+        stopBtn.style.color = '';
+        document.querySelector('button[onclick="runCode()"]').style.display = 'inline-block';
       }
     }
 
@@ -2474,10 +1346,14 @@
 
     function saveFile(filename)
     {
-      var json = Blockly.serialization.workspaces.save(workspace);
-      var blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+      // 创建工作区状态对象
+      let workspaceState = Blockly.serialization.workspaces.save(workspace);
+      workspaceState.skills = window.uploadedSkills;
+      workspaceState.startBlockIds = startBlockIds; // 保存startBlockIds
 
-      var a = document.createElement('a');
+      const blob = new Blob([JSON.stringify(workspaceState, null, 2)], { type: 'application/json' });
+
+      let a = document.createElement('a');
       a.download = filename;
       a.href = URL.createObjectURL(blob);
       a.click();
@@ -2564,6 +1440,226 @@
       if (overlay) overlay.remove();
     }
 
+    // 存储上传的技能文件
+    window.uploadedSkills = [];
+
+    function triggerSkillFileUpload()
+    {
+      const skillFileInput = document.getElementById('skillFileInput');
+      skillFileInput.value = null;
+      skillFileInput.click();
+    }
+
+    // 处理技能文件上传
+    function handleSkillFilesUpload(files)
+    {
+      if (!files || files.length === 0) return;
+
+      let successCount = 0;
+      let failCount = 0;
+      let processedCount = 0;
+
+      for (let i = 0; i < files.length; i++)
+      {
+        const file = files[i];
+        handleSkillFileUpload(file, (success) =>
+        {
+          if (success)
+          {
+            successCount++;
+          } else
+          {
+            failCount++;
+          }
+          processedCount++;
+
+          // 当所有文件都处理完成后，显示统计信息
+          if (processedCount === files.length)
+          {
+            if (successCount > 0)
+            {
+              console.info([getText("skillFilesUploaded").replace("{count}", successCount)]);
+            }
+            if (failCount > 0)
+            {
+              console.error([getText("skillFilesUploadFailed").replace("{count}", failCount)]);
+            }
+          }
+        });
+      }
+    }
+
+    // 处理单个技能文件上传
+    function handleSkillFileUpload(file, callback)
+    {
+      if (!file)
+      {
+        if (callback) callback(false);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e)
+      {
+        try
+        {
+          // 解析技能文件内容
+          const skillData = parseSkillFile(e.target.result);
+
+          // 存储解析后的数据,如果文件名已存在，则覆盖
+          const existingSkill = uploadedSkills.find(skill => skill.name === file.name);
+          if (existingSkill)
+          {
+            existingSkill.content = skillData;
+          } else
+          {
+            uploadedSkills.push({
+              name: file.name,
+              content: skillData
+            });
+          }
+
+          // 更新文件列表显示
+          updateSkillFilesList();
+
+          // 显示成功消息
+          console.info([getText("skillFileUploaded").replace("{filename}", file.name)]);
+
+          if (callback) callback(true);
+        } catch (err)
+        {
+          console.error([getText("skillFilesUploadFailed").replace("{filename}", file.name)]);
+          if (callback) callback(false);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 解析技能文件内容
+    function parseSkillFile(content)
+    {
+      // 移除所有空行和注释
+      const lines = content.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('//'));
+
+      // 查找token行
+      const tokenLine = lines.find(line => line.startsWith('# Token'));
+      if (!tokenLine)
+      {
+        throw new Error('未找到Token');
+      }
+      const token = lines[lines.indexOf(tokenLine) + 1].trim();
+
+      // 查找data数组
+      const dataStartIndex = lines.findIndex(line => line.startsWith('# Data'));
+      if (dataStartIndex === -1)
+      {
+        throw new Error('未找到Data');
+      }
+
+      // 解析data数组
+      const dataLines = lines.slice(dataStartIndex + 1);
+      let data = [];
+
+      for (const line of dataLines)
+      {
+        // 跳过空行和注释
+        if (!line || line.startsWith('#')) continue;
+
+        // 移除行首尾的大括号和空格
+        const cleanLine = line.replace(/[{}]/g, '').trim();
+        if (!cleanLine) continue;
+
+        // 分割数字并转换为整数
+        const numbers = cleanLine.split(',')
+          .map(num => parseInt(num.trim()))
+          .filter(num => !isNaN(num));
+
+        if (numbers.length > 0)
+        {
+          data.push(numbers);
+        }
+      }
+
+      return {
+        token: token,
+        data: data
+      };
+    }
+
+    // 更新技能文件列表显示
+    function updateSkillFilesList()
+    {
+      const container = document.getElementById('skillFilesContainer');
+      const list = document.getElementById('skillFilesList');
+
+      if (uploadedSkills.length === 0)
+      {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'block';
+      list.innerHTML = '';
+
+      uploadedSkills.forEach((skill, index) =>
+      {
+        const item = document.createElement('div');
+        item.style.padding = '5px';
+        item.style.borderBottom = '1px solid #ddd';
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = skill.name;
+        nameSpan.style.cursor = 'pointer';
+        nameSpan.onclick = () => loadSkill(skill);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '×';
+        deleteBtn.style.background = 'none';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.color = '#ff4444';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.fontSize = '20px';
+        deleteBtn.style.padding = '0 5px';
+        deleteBtn.onclick = (e) =>
+        {
+          e.stopPropagation();
+          uploadedSkills.splice(index, 1);
+          updateSkillFilesList();
+        };
+
+        item.appendChild(nameSpan);
+        item.appendChild(deleteBtn);
+        list.appendChild(item);
+      });
+    }
+
+    // 加载技能文件
+    function loadSkill(skill)
+    {
+      try
+      {
+        // 将解析后的数据转换为字符串并发送到串口
+        if (writer)
+        {
+          const skillString = JSON.stringify(skill.content);
+          writer.write(new TextEncoder().encode(skillString + '\n'));
+          addConsoleMessage([getText("skillLoaded").replace("{filename}", skill.name)]);
+        } else
+        {
+          addConsoleMessage([getText("serialNotConnected")]);
+        }
+      } catch (err)
+      {
+        console.error(getText("loadSkillFailed"), err);
+        addConsoleMessage([getText("skillLoadFailed")]);
+      }
+    }
+
     function loadWorkspace(file)
     {
       var reader = new FileReader();
@@ -2571,8 +1667,36 @@
       {
         try
         {
-          var json = JSON.parse(e.target.result);
-          Blockly.serialization.workspaces.load(json, workspace);
+          var saveData = JSON.parse(e.target.result);
+
+          // 加载工作区
+          Blockly.serialization.workspaces.load(saveData, workspace);
+
+          // 加载技能文件
+          if (saveData.skills && Array.isArray(saveData.skills))
+          {
+            window.uploadedSkills = saveData.skills;
+            updateSkillFilesList();
+          }
+
+          // 恢复startBlockIds
+          if (saveData.startBlockIds && Array.isArray(saveData.startBlockIds))
+          {
+            startBlockIds = saveData.startBlockIds;
+            // 验证保存的startBlockIds是否仍然存在于工作区中
+            const existingBlocks = startBlockIds.filter(id => workspace.getBlockById(id));
+            if (existingBlocks.length !== startBlockIds.length)
+            {
+              // 如果有些块不存在了，重新初始化
+              startBlockIds = [];
+              addDefaultConnectionBlock();
+            }
+          } else
+          {
+            // 如果没有保存的startBlockIds，重新初始化
+            startBlockIds = [];
+            addDefaultConnectionBlock();
+          }
 
           // 保存当前文件信息
           currentFile = file;
@@ -2580,11 +1704,23 @@
           // 更新文件名和标签显示
           updateUIText();
 
+          if (currentDeviceIP !== "192.168.4.1")
+          {
+            // 查找工作区中的make_connection积木块并更新IP地址
+            const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
+            if (makeConnectionBlocks && makeConnectionBlocks.length > 0)
+            {
+              // 更新第一个make_connection积木块的IP_ADDRESS字段
+              makeConnectionBlocks[0].setFieldValue(currentDeviceIP, 'IP_ADDRESS');
+            }
+          }
+
           // 不使用alert，而是在控制台显示加载成功信息
           const successMsg = getText('fileLoaded').replace('{filename}', file.name);
           addConsoleMessage([successMsg]);
         } catch (err)
         {
+          console.error(getText("loadFileFailed"), err);
           alert(getText('loadFileFailed'));
         }
       };
@@ -2604,20 +1740,15 @@
         document.getElementById('loadInput').click();
       }
       // 添加撤销快捷键(Ctrl+Z)
-      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z')
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key === 'z')
       {
+        //prevent browser default behavior
         event.preventDefault();
-        // 使用undoStack_属性检查是否可以撤销
-        if (workspace.undoStack_ && workspace.undoStack_.length > 0)
-        {
-          workspace.undo(false);
-          updateUndoRedoState();
-        }
       }
       // 添加重做快捷键(Ctrl+Y 或 Ctrl+Shift+Z)
       if ((event.ctrlKey || event.metaKey) &&
-        ((event.key.toLowerCase() === 'y') ||
-          (event.shiftKey && event.key.toLowerCase() === 'z')))
+        ((!event.shiftKey && event.key.toLowerCase() === 'y') ||
+          (event.shiftKey && event.key === 'z')))
       {
         event.preventDefault();
         // 使用redoStack_属性检查是否可以重做
@@ -2632,7 +1763,8 @@
     function addConsoleMessage(args)
     {
       const logDiv = document.getElementById('consoleLog');
-      const time = new Date().toLocaleTimeString();
+      const showTimestamp = document.getElementById('showTimestampBtn').classList.contains('active');
+      const time = getFormattedTimestamp();
 
       const messageDiv = document.createElement('div');
       messageDiv.className = 'console-item';
@@ -2654,7 +1786,21 @@
       });
 
       const messageText = messages.join(' ');
-      messageDiv.textContent = `[${time}] ${messageText} `;
+
+      // 创建时间戳容器
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'timestamp';
+      timestampSpan.textContent = `${time} `;
+      timestampSpan.style.display = showTimestamp ? 'inline' : 'none';
+
+      // 创建消息内容容器
+      const messageSpan = document.createElement('span');
+      messageSpan.className = 'message-content';
+      messageSpan.textContent = `${messageText} `;
+
+      // 将两个容器添加到消息div中
+      messageDiv.appendChild(timestampSpan);
+      messageDiv.appendChild(messageSpan);
 
       // 检测是否为"任务结束"消息，如果是则使用绿色字体
       if (messageText === getText('taskEnded'))
@@ -2666,8 +1812,8 @@
       // 使用原生DOM方法确保立即渲染，改为添加到末尾
       logDiv.appendChild(messageDiv);
 
-      // 保持最多显示100条记录
-      while (logDiv.children.length > 100)
+      // 保持最多显示500条记录
+      while (logDiv.children.length > 500)
       {
         logDiv.removeChild(logDiv.firstChild);
       }
@@ -2682,6 +1828,201 @@
     function clearConsole()
     {
       document.getElementById('consoleLog').innerHTML = '';
+    }
+
+    // 生成调试日志
+    function generateLog()
+    {
+      try
+      {
+        // 获取当前时间戳
+        const now = new Date();
+        const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+
+        // 获取JavaScript代码
+        let jsCode = '';
+        try
+        {
+          jsCode = Blockly.JavaScript.workspaceToCode(workspace);
+          if (!jsCode.trim())
+          {
+            jsCode = '// No blocks in workspace';
+          }
+        } catch (error)
+        {
+          jsCode = `// Error generating code: ${error.message}`;
+        }
+
+        // 获取Console Log内容
+        const consoleLogElement = document.getElementById('consoleLog');
+        let consoleLogContent = '';
+        if (consoleLogElement)
+        {
+          // 提取文本内容，去除HTML标签
+          const logEntries = consoleLogElement.querySelectorAll('.log-entry, .log-message');
+          if (logEntries.length > 0)
+          {
+            const logTexts = Array.from(logEntries).map(entry =>
+            {
+              return entry.textContent || entry.innerText || '';
+            });
+            consoleLogContent = logTexts.join('\n');
+          } else
+          {
+            // 如果没有找到特定的log条目，获取所有文本内容
+            consoleLogContent = consoleLogElement.textContent || consoleLogElement.innerText || '';
+          }
+
+          if (!consoleLogContent.trim())
+          {
+            consoleLogContent = '// No console log output';
+          }
+        } else
+        {
+          consoleLogContent = '// Console log element not found';
+        }
+
+        // 获取Serial Log内容
+        const serialLogElement = document.getElementById('serialOutput');
+        let serialLogContent = '';
+        if (serialLogElement)
+        {
+          // 提取文本内容，去除HTML标签
+          const logEntries = serialLogElement.querySelectorAll('.log-entry, .log-message');
+          if (logEntries.length > 0)
+          {
+            const logTexts = Array.from(logEntries).map(entry =>
+            {
+              return entry.textContent || entry.innerText || '';
+            });
+            serialLogContent = logTexts.join('\n');
+          } else
+          {
+            // 如果没有找到特定的log条目，获取所有文本内容
+            serialLogContent = serialLogElement.textContent || serialLogElement.innerText || '';
+          }
+
+          if (!serialLogContent.trim())
+          {
+            serialLogContent = '// No serial log output';
+          }
+        } else
+        {
+          serialLogContent = '// Serial log element not found';
+        }
+
+        // 生成Markdown格式的日志
+        const logContent = `# Debug Log - ${now.toLocaleString()}
+
+## Code
+\`\`\`javascript
+${jsCode}
+\`\`\`
+
+## Console Log
+\`\`\`
+${consoleLogContent}
+\`\`\`
+
+## Serial Log
+\`\`\`
+${serialLogContent}
+\`\`\`
+
+---
+Generated at: ${now.toISOString()}
+`;
+
+        // 复制到剪贴板
+        navigator.clipboard.writeText(logContent).then(() =>
+        {
+          console.log('Log copied to clipboard successfully');
+        }).catch(err =>
+        {
+          console.error('Failed to copy to clipboard:', err);
+          // 如果clipboard API失败，尝试使用旧的方法
+          const textArea = document.createElement('textarea');
+          textArea.value = logContent;
+          document.body.appendChild(textArea);
+          textArea.select();
+          try
+          {
+            document.execCommand('copy');
+            console.log('Log copied to clipboard using fallback method');
+          } catch (fallbackErr)
+          {
+            console.error('Fallback copy method also failed:', fallbackErr);
+          }
+          document.body.removeChild(textArea);
+        });
+
+        // 下载为文件
+        const filename = `log_${timestamp}.md`;
+        const blob = new Blob([logContent], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log(`Debug log generated: ${filename}`);
+        console.log('Log content also copied to clipboard for AI debugging');
+
+      } catch (error)
+      {
+        console.error('Error generating log:', error);
+        alert('Error generating log: ' + error.message);
+      }
+    }
+
+    // 切换是否显示时间戳
+    function toggleShowTimestamp()
+    {
+      const showTimestamp = !document.getElementById('showTimestampBtn').classList.contains('active');
+      const btn = document.getElementById('showTimestampBtn');
+      const consoleLog = document.getElementById('consoleLog');
+
+      if (showTimestamp)
+      {
+        btn.classList.add('active');
+      } else
+      {
+        btn.classList.remove('active');
+      }
+
+      // 获取所有时间戳容器并切换显示状态
+      const timestampSpans = consoleLog.querySelectorAll('.timestamp');
+      timestampSpans.forEach(span =>
+      {
+        span.style.display = showTimestamp ? 'inline' : 'none';
+      });
+    }
+
+    // 切换是否显示串口时间戳
+    function toggleShowSerialTimestamp()
+    {
+      const showSerialTimestamp = !document.getElementById('showSerialTimestampBtn').classList.contains('active');
+      const btn = document.getElementById('showSerialTimestampBtn');
+      const serialOutput = document.getElementById('serialOutput');
+
+      if (showSerialTimestamp)
+      {
+        btn.classList.add('active');
+      } else
+      {
+        btn.classList.remove('active');
+      }
+
+      // 获取所有时间戳容器并切换显示状态
+      const timestampSpans = serialOutput.querySelectorAll('.timestamp');
+      timestampSpans.forEach(span =>
+      {
+        span.style.display = showSerialTimestamp ? 'inline' : 'none';
+      });
     }
 
     // 切换是否显示发送的命令
@@ -2699,13 +2040,54 @@
       }
     }
 
+    // 切换是否显示debug信息
+    function toggleShowDebug()
+    {
+      showDebug = !showDebug;
+      // 更新按钮样式
+      const btn = document.getElementById('showDebugBtn');
+      if (showDebug)
+      {
+        btn.classList.add('active');
+      } else
+      {
+        btn.classList.remove('active');
+      }
+    }
+
     // 只重写 console.log
     const originalLog = console.log;
     console.log = function ()
     {
+      // 检查是否为debug信息
+      const message = Array.from(arguments).join(' ');
+      const isDebugMessage = isDebugInfo(message);
+
+      // 如果是debug信息且debug开关关闭，则不显示
+      if (isDebugMessage && !showDebug)
+      {
+        originalLog.apply(console, arguments);
+        return;
+      }
+
       addConsoleMessage(arguments);
       originalLog.apply(console, arguments);
     };
+
+    // 检查是否为debug信息的函数
+    function isDebugInfo(message)
+    {
+      const debugPatterns = [
+        /\[Heartbeat\]/,
+        /handleMessage/,
+        /message type/,
+        /send message/,
+        /Program ended/,
+        /\[WebSocket\]/
+      ];
+
+      return debugPatterns.some(pattern => pattern.test(message));
+    }
 
     // 添加串口通信相关的JavaScript代码
     let port = null;
@@ -2719,6 +2101,15 @@
     // 设备IP地址
     let currentDeviceIP = '192.168.4.1'; // 默认IP地址
 
+    // 配置文件相关
+    let config = {
+      lastKnownIP: '192.168.4.1',
+      lastConnectedTime: '',
+      connectionHistory: [],
+      autoConnect: true,
+      connectionTimeout: 5000
+    };
+
     // 添加命令历史记录相关变量
     let commandHistory = [];
     let historyIndex = -1;
@@ -2727,18 +2118,650 @@
     // 是否显示发送的命令
     let showSentCommands = false;
 
+    // 是否显示debug信息
+    let showDebug = false;
+
     let ipCheckTimer = null;
     let lastPartialIP = null;
+    let serialBufferText = '';
     let serialBuffer = '';
+    let lastSerialMessageTime = 0; // 记录上次收到串口消息的时间
+    let serialOutputBuffer = ''; // 串口输出缓冲区
+    let serialOutputTimer = null; // 串口输出处理定时器
+
+    // ESP32开发板使用的USB串口芯片配置
+    const ESP32_USB_CHIPS = [
+      // 通用串口芯片厂商（只检查vendorId，不限制productId）
+      { vendorId: 0x1a86, name: 'CH340/CH343' },  // 沁恒微电子（CH340、CH343等）
+      { vendorId: 0x10c4, name: 'CP2102' },       // Silicon Labs（CP2102等）
+      // ESP32内置USB（需要精确匹配）
+      { vendorId: 0x303a, productId: 0x1001, name: 'ESP32-S2' }, // ESP32-S2 内置USB
+      { vendorId: 0x303a, productId: 0x0002, name: 'ESP32-S3' }, // ESP32-S3 内置USB
+    ];
+
+    // 系统检测函数
+    function detectOperatingSystem()
+    {
+      const userAgent = navigator.userAgent;
+      const platform = navigator.platform;
+
+      if (userAgent.includes('Chrome OS') || userAgent.includes('CrOS'))
+      {
+        return 'chromebook';
+      } else if (platform.includes('Mac'))
+      {
+        return 'mac';
+      } else if (platform.includes('Win'))
+      {
+        return 'windows';
+      } else if (platform.includes('Linux'))
+      {
+        return 'linux';
+      } else
+      {
+        return 'unknown';
+      }
+    }
+
+    // 全局变量存储操作系统类型，页面加载时初始化一次
+    const OPERATING_SYSTEM = detectOperatingSystem();
+
+    // 检查串口是否为ESP32开发板使用的芯片
+    function isESP32SerialPort(port)
+    {
+      try
+      {
+        const portInfo = port.getInfo();
+        if (!portInfo.usbVendorId || !portInfo.usbProductId)
+        {
+          return false;
+        }
+
+        return ESP32_USB_CHIPS.some(chip =>
+        {
+          // 对于有productId的条目（ESP32-S2/S3），需要精确匹配
+          if (chip.productId !== undefined)
+          {
+            return chip.vendorId === portInfo.usbVendorId &&
+              chip.productId === portInfo.usbProductId;
+          }
+          // 对于通用芯片（CH340/CP2102），只检查vendorId
+          return chip.vendorId === portInfo.usbVendorId;
+        });
+      } catch (error)
+      {
+        console.warn(getText("cannotGetPortInfo"), error);
+        return false;
+      }
+    }
+
+    // 获取串口显示名称（Arduino IDE风格）
+    function getSerialPortDisplayName(port)
+    {
+      try
+      {
+        const portInfo = port.getInfo();
+        const os = OPERATING_SYSTEM;
+
+        if (os === 'mac')
+        {
+          // macOS: 生成类似 cu.wchusbserial58CF0756201 的格式
+          const vendorId = portInfo.usbVendorId?.toString(16).toUpperCase() || '0000';
+          const productId = portInfo.usbProductId?.toString(16).toUpperCase() || '0000';
+
+          // 根据不同的芯片生成不同的前缀
+          if (portInfo.usbVendorId === 0x1a86)
+          {
+            // CH340/CH343
+            return `cu.wchusbserial${vendorId}${productId}`;
+          } else if (portInfo.usbVendorId === 0x10c4)
+          {
+            // CP2102
+            return `cu.SLAB_USBtoUART`;
+          } else
+          {
+            // 其他USB串口
+            return `cu.usbserial${vendorId}${productId}`;
+          }
+        } else if (os === 'linux')
+        {
+          // Linux: 类似格式
+          const vendorId = portInfo.usbVendorId?.toString(16).toUpperCase() || '0000';
+          const productId = portInfo.usbProductId?.toString(16).toUpperCase() || '0000';
+          return `ttyUSB${vendorId}${productId}`;
+        } else if (os === 'windows')
+        {
+          // Windows: 显示芯片名称
+          const chip = ESP32_USB_CHIPS.find(chip =>
+          {
+            if (chip.productId !== undefined)
+            {
+              return chip.vendorId === portInfo.usbVendorId &&
+                chip.productId === portInfo.usbProductId;
+            }
+            return chip.vendorId === portInfo.usbVendorId;
+          });
+          return chip ? chip.name : 'USB Serial';
+        } else
+        {
+          // 其他系统
+          const vendorId = portInfo.usbVendorId?.toString(16).toUpperCase() || '0000';
+          const productId = portInfo.usbProductId?.toString(16).toUpperCase() || '0000';
+          return `Serial${vendorId}${productId}`;
+        }
+      } catch (error)
+      {
+        console.warn(getText("cannotGetPortDisplayName"), error);
+        return 'Serial Port';
+      }
+    }
+
+    // 生成简短的4位伪序列号（基于端口在列表中的位置）
+    function generatePortPseudoSerial(port, allPorts, sameTypePorts)
+    {
+      try
+      {
+        // 获取当前端口在相同类型设备中的索引
+        const indexInSameType = sameTypePorts.indexOf(port);
+        const deviceNumber = indexInSameType >= 0 ? indexInSameType + 1 : 1;
+
+        // 获取当前端口在所有端口中的索引
+        const indexInAll = allPorts.indexOf(port);
+        const globalIndex = indexInAll >= 0 ? indexInAll : 0;
+
+        // 生成简短的4位数字标识
+        // 基数从1000开始，确保是4位数
+        const baseId = 1000 + (deviceNumber * 10) + (globalIndex % 10);
+
+        return baseId.toString();
+      } catch (error)
+      {
+        // 如果生成失败，使用随机4位数
+        const randomId = 1000 + Math.floor(Math.random() * 9000);
+        return randomId.toString();
+      }
+    }
+
+    // 获取串口智能显示名称（多设备时只显示有区分度的部分）
+    function getSmartPortDisplayName(port, allPorts)
+    {
+      try
+      {
+        // 如果只有一个设备，直接显示完整名称
+        if (!allPorts || allPorts.length <= 1)
+        {
+          return getSerialPortDisplayName(port);
+        }
+
+        // 获取所有设备的完整名称
+        const allNames = allPorts.map(p => getSerialPortDisplayName(p));
+        const currentName = getSerialPortDisplayName(port);
+
+        // 如果名称都不同，直接返回
+        const duplicateNames = allNames.filter(name => name === currentName);
+        if (duplicateNames.length <= 1)
+        {
+          return currentName;
+        }
+
+        // 对于有相同前缀的设备，生成类似真实设备名称的显示
+        const portInfo = port.getInfo();
+        const os = OPERATING_SYSTEM;
+
+        // 获取芯片信息
+        const sameTypeChip = ESP32_USB_CHIPS.find(chip =>
+        {
+          if (chip.productId !== undefined)
+          {
+            return chip.vendorId === portInfo.usbVendorId &&
+              chip.productId === portInfo.usbProductId;
+          }
+          return chip.vendorId === portInfo.usbVendorId;
+        });
+
+        const chipName = sameTypeChip ? sameTypeChip.name : 'USB';
+
+        // 获取相同类型的端口列表
+        const sameTypePorts = allPorts.filter(p =>
+        {
+          try
+          {
+            const pInfo = p.getInfo();
+            return pInfo.usbVendorId === portInfo.usbVendorId &&
+              pInfo.usbProductId === portInfo.usbProductId;
+          } catch (e)
+          {
+            return false;
+          }
+        });
+
+        // 生成伪序列号来区分设备
+        const pseudoSerial = generatePortPseudoSerial(port, allPorts, sameTypePorts);
+
+        // 调试信息（仅在调试模式下显示）
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("generatedPseudoSerial").replace("{chipName}", chipName).replace("{serial}", pseudoSerial).replace("{index}", sameTypePorts.indexOf(port) + 1).replace("{total}", sameTypePorts.length));
+        }
+
+        if (os === 'mac')
+        {
+          // macOS: 使用简洁的4位数字
+          return `cu.wchusbserial${pseudoSerial}`;
+        } else if (os === 'linux')
+        {
+          return `ttyUSB-${pseudoSerial}`;
+        } else if (os === 'windows')
+        {
+          return `${chipName}(${pseudoSerial})`;
+        } else
+        {
+          return `${chipName}-${pseudoSerial}`;
+        }
+      } catch (error)
+      {
+        console.warn(getText("cannotGetPortDisplayName"), error);
+        return 'Serial Port';
+      }
+    }
+
+    // 检查串口是否为有效的usbserial端口（Mac系统下排除后缀全为0的端口）
+    function isValidUsbserialPort(port)
+    {
+      try
+      {
+        const portInfo = port.getInfo();
+        const os = OPERATING_SYSTEM;
+
+        if (os === 'mac')
+        {
+          // 在Mac系统下，检查是否为usbserial端口且后缀不全为0
+          const vendorId = portInfo.usbVendorId?.toString(16).toUpperCase() || '0000';
+          const productId = portInfo.usbProductId?.toString(16).toUpperCase() || '0000';
+
+          // 检查vendorId和productId是否全为0
+          if (vendorId === '0000' && productId === '0000')
+          {
+            return false;
+          }
+
+          // 检查是否为usbserial相关端口
+          if (portInfo.usbVendorId === 0x1a86 || portInfo.usbVendorId === 0x10c4)
+          {
+            return true;
+          }
+
+          // 对于其他USB串口，检查是否包含有效的vendorId和productId
+          return vendorId !== '0000' && productId !== '0000';
+        }
+
+        // 其他系统保持原有逻辑
+        return true;
+      } catch (error)
+      {
+        console.warn("Cannot get port info for validation:", error);
+        return false;
+      }
+    }
+
+    // 获取ESP32串口显示名称（保留用于ESP32特定功能）
+    function getESP32PortDisplayName(port)
+    {
+      try
+      {
+        const portInfo = port.getInfo();
+        const chip = ESP32_USB_CHIPS.find(chip =>
+        {
+          if (chip.productId !== undefined)
+          {
+            return chip.vendorId === portInfo.usbVendorId &&
+              chip.productId === portInfo.usbProductId;
+          }
+          return chip.vendorId === portInfo.usbVendorId;
+        });
+
+        const os = OPERATING_SYSTEM;
+        let displayName = '';
+
+        if (chip)
+        {
+          // 如果是ESP32芯片
+          if (os === 'windows')
+          {
+            displayName = `${chip.name} ESP32`;
+          } else if (os === 'mac' || os === 'linux')
+          {
+            displayName = `${chip.name} (ESP32)`;
+          } else
+          {
+            displayName = `${chip.name} ESP32`;
+          }
+        } else
+        {
+          // 如果不是ESP32芯片，显示USB信息
+          const vendorId = portInfo.usbVendorId?.toString(16) || 'unknown';
+          const productId = portInfo.usbProductId?.toString(16) || 'unknown';
+          displayName = `USB Serial (0x${vendorId}:0x${productId})`;
+        }
+
+        return displayName;
+      } catch (error)
+      {
+        console.warn(getText("cannotGetPortDisplayName"), error);
+        return 'Unknown Serial Port';
+      }
+    }
+
+    // 获取并过滤ESP32串口
+    async function getESP32SerialPorts()
+    {
+      try
+      {
+        // 获取所有已授权的串口
+        const ports = await navigator.serial.getPorts();
+
+        // 过滤有效的串口（在Mac系统下排除后缀全为0的端口）
+        const validPorts = ports.filter(port => isValidUsbserialPort(port));
+
+        // 过滤出ESP32串口
+        const esp32Ports = validPorts.filter(port => isESP32SerialPort(port));
+
+        console.log(getText("foundESP32Ports").replace("{count}", esp32Ports.length));
+        return esp32Ports;
+      } catch (error)
+      {
+        console.error(getText("getPortListFailed"), error);
+        return [];
+      }
+    }
+
+    // 创建ESP32串口选择对话框
+    function createESP32PortSelector(ports)
+    {
+      return new Promise((resolve, reject) =>
+      {
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("creatingESP32PortSelector"));
+        }
+
+        // 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.className = 'esp32-port-selector';
+
+        // 添加调试样式
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'esp32-port-dialog';
+
+        // 添加调试样式
+        dialog.style.background = 'white';
+        dialog.style.padding = '20px';
+        dialog.style.borderRadius = '8px';
+        dialog.style.minWidth = '300px';
+        dialog.style.maxWidth = '500px';
+        dialog.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+        dialog.style.margin = '20px';
+
+        dialog.innerHTML = `
+          <h3 style="margin: 0 0 15px 0; color: #333;">${getText("selectESP32Port")}</h3>
+          <div style="margin-bottom: 15px;">
+            ${ports.map((port, index) =>
+        {
+          const displayName = getSmartPortDisplayName(port, ports);
+          return `
+                <div class="esp32-port-option" onclick="selectESP32Port(${index})">
+                  <strong>${displayName}</strong>
+                </div>
+              `;
+        }).join('')}
+          </div>
+          <div class="esp32-port-buttons">
+            <button class="cancel" onclick="cancelESP32PortSelection()">${getText("cancel")}</button>
+          </div>
+        `;
+
+        // 添加选择函数到全局作用域
+        window.selectESP32Port = (index) =>
+        {
+          const selectedPort = ports[index];
+          document.body.removeChild(overlay);
+          delete window.selectESP32Port;
+          delete window.cancelESP32PortSelection;
+          resolve(selectedPort);
+        };
+
+        window.cancelESP32PortSelection = () =>
+        {
+          document.body.removeChild(overlay);
+          delete window.selectESP32Port;
+          delete window.cancelESP32PortSelection;
+          reject(new Error(getText("userCancelledSelection")));
+        };
+
+        // 将对话框添加到遮罩层中
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("esp32PortSelectorCreated"));
+        }
+      });
+    }
+
+    // 创建所有串口选择对话框
+    function createAllPortsSelector(ports)
+    {
+      return new Promise((resolve, reject) =>
+      {
+        console.log("Creating all ports selector dialog...");
+
+        // 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.className = 'esp32-port-selector';
+
+        // 添加调试样式
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'esp32-port-dialog';
+
+        // 添加调试样式
+        dialog.style.background = 'white';
+        dialog.style.padding = '20px';
+        dialog.style.borderRadius = '8px';
+        dialog.style.minWidth = '300px';
+        dialog.style.maxWidth = '500px';
+        dialog.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+        dialog.style.margin = '20px';
+
+        dialog.innerHTML = `
+          <h3 style="margin: 0 0 15px 0; color: #333;">${getText("selectSerialPort")}</h3>
+          <div style="margin-bottom: 15px;">
+            ${ports.map((port, index) =>
+        {
+          const displayName = getSmartPortDisplayName(port, ports);
+          return `
+                <div class="esp32-port-option" onclick="selectAllPort(${index})">
+                  <strong>${displayName}</strong>
+                </div>
+              `;
+        }).join('')}
+            <div class="esp32-port-option esp32-port-system-option" onclick="selectSystemPort()">
+              <strong>🔍 ${getText("selectOtherPort")}</strong>
+              <small style="display: block; color: #666; margin-top: 2px;">${getText("selectOtherPortDesc")}</small>
+            </div>
+          </div>
+          <div class="esp32-port-buttons">
+            <button class="cancel" onclick="cancelAllPortSelection()">${getText("cancel")}</button>
+          </div>
+        `;
+
+        // 添加选择函数到全局作用域
+        window.selectAllPort = (index) =>
+        {
+          const selectedPort = ports[index];
+          document.body.removeChild(overlay);
+          delete window.selectAllPort;
+          delete window.selectSystemPort;
+          delete window.cancelAllPortSelection;
+          resolve(selectedPort);
+        };
+
+        window.selectSystemPort = async () =>
+        {
+          try
+          {
+            const systemPort = await navigator.serial.requestPort();
+            document.body.removeChild(overlay);
+            delete window.selectAllPort;
+            delete window.selectSystemPort;
+            delete window.cancelAllPortSelection;
+            resolve(systemPort);
+          } catch (error)
+          {
+            if (error.name === 'NotFoundError')
+            {
+              // 用户取消选择，不关闭对话框，让用户可以继续选择其他选项
+              console.log('User cancelled system port selection');
+            } else
+            {
+              console.error('Error in system port selection:', error);
+              document.body.removeChild(overlay);
+              delete window.selectAllPort;
+              delete window.selectSystemPort;
+              delete window.cancelAllPortSelection;
+              reject(error);
+            }
+          }
+        };
+
+        window.cancelAllPortSelection = () =>
+        {
+          document.body.removeChild(overlay);
+          delete window.selectAllPort;
+          delete window.selectSystemPort;
+          delete window.cancelAllPortSelection;
+          reject(new Error(getText("userCancelledSelection")));
+        };
+
+        // 将对话框添加到遮罩层中
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        console.log("All ports selector dialog created and added to DOM");
+      });
+    }
 
     async function openSerialPort()
     {
       try
       {
-        port = await navigator.serial.requestPort();
+
+        // 检测操作系统
+        const os = OPERATING_SYSTEM;
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("detectedOS").replace("{os}", os));
+        }
+
+        // 获取所有已授权的串口
+        const allPorts = await navigator.serial.getPorts();
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("foundAuthorizedPorts").replace("{count}", allPorts.length));
+        }
+
+        // 过滤有效的串口（在Mac系统下排除后缀全为0的端口）
+        const validPorts = allPorts.filter(port => isValidUsbserialPort(port));
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("validPortsAfterFiltering").replace("{valid}", validPorts.length).replace("{filtered}", allPorts.length - validPorts.length));
+
+          // 在Mac系统下显示过滤详情
+          if (os === 'mac' && allPorts.length !== validPorts.length)
+          {
+            console.log("On macOS, filtered out ports with vendorId=0x0000 and productId=0x0000");
+          }
+        }
+
+        // 显示有效串口的简要信息
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          validPorts.forEach((port, index) =>
+          {
+            try
+            {
+              const displayName = getSmartPortDisplayName(port, validPorts);
+              const portInfo = port.getInfo();
+              const isESP32 = isESP32SerialPort(port);
+              console.log(getText("portInfo").replace("{index}", index + 1).replace("{name}", displayName));
+
+              // 显示硬件信息（用于诊断端口识别问题）
+              console.log(getText("hardwareInfo").replace("{vid}", portInfo.usbVendorId?.toString(16)).replace("{pid}", portInfo.usbProductId?.toString(16)).replace("{isESP32}", isESP32));
+            } catch (error)
+            {
+              console.log(getText("portInfoError").replace("{index}", index + 1));
+            }
+          });
+        }
+
+        // 获取ESP32串口列表
+        const esp32Ports = validPorts.filter(port => isESP32SerialPort(port));
+
+        // 显示ESP32端口检测结果
+        if (typeof showDebug !== 'undefined' && showDebug)
+        {
+          console.log(getText("esp32DetectionResult").replace("{esp32Count}", esp32Ports.length).replace("{totalCount}", validPorts.length));
+        }
+
+        // 总是显示完整的串口选择，包括系统选择选项
+        if (validPorts.length === 0)
+        {
+          // 如果没有任何已授权的串口，直接请求用户选择新的串口
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log(getText("noAuthorizedPorts"));
+          }
+          const selectPort = await navigator.serial.requestPort();
+          port = selectPort;
+        } else
+        {
+          // 显示包含所有端口选择的对话框（包括"选择其他端口"选项）
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log(getText("showingPortsForSelection").replace("{count}", validPorts.length));
+          }
+          port = await createAllPortsSelector(validPorts);
+        }
+
+        // 连接串口
         try
         {
           await port.open({ baudRate: 115200 });
+          console.log(getText("esp32PortConnected"));
         } catch (portError)
         {
           // 检查是否是因为串口被占用
@@ -2749,7 +2772,7 @@
           {
             // 显示提示窗口
             alert(getText("serialPortBusy"));
-            return;
+            throw new Error('Serial port busy');
           } else
           {
             // 其他错误，继续抛出
@@ -2757,7 +2780,27 @@
           }
         }
 
-        // 显示串口界面，使用flex布局但不改变整体宽度
+        // 设置读取器和写入器（用于验证）
+        reader = port.readable.getReader();
+        writer = port.writable.getWriter();
+
+        // 验证串口连接 - 发送'?'字符并等待回复
+        console.log(getText("validatingSerialConnection"));
+        const validationResult = await validateSerialConnection();
+
+        if (!validationResult)
+        {
+          // 验证失败，立即显示错误窗口，然后快速关闭串口
+          console.log(getText("serialValidationFailed"));
+          showCustomAlert(getText("serialValidationFailed"), getText("connectionFailed"));
+          // 快速关闭串口，不等待超时
+          quickCloseSerialPort();
+          return;
+        }
+
+        console.log(getText("serialValidationSuccess"));
+
+        // 验证成功后显示串口界面
         const serialInterface = document.getElementById('serialInterface');
         serialInterface.style.display = 'flex';
 
@@ -2774,9 +2817,17 @@
 
         // 更新按钮状态
         document.getElementById('openSerialBtn').style.display = 'none'; // 隐藏连接按钮
+        document.getElementById('showSerialTimestampBtn').style.display = 'inline-flex'; // 显示时间戳按钮
         document.getElementById('closeSerialBtn').style.display = 'inline-flex'; // 显示关闭按钮
         document.getElementById('clearSerialBtn').style.display = 'inline-flex'; // 显示清除按钮
-        document.getElementById('quickConnectBtn').disabled = false; // 启用快速连接按钮
+
+        // 更新串口标题显示连接的设备信息
+        const serialTitle = document.getElementById('serialOutputTitle');
+        if (serialTitle)
+        {
+          const displayName = getSerialPortDisplayName(port);
+          serialTitle.textContent = getText("serialMonitorTitle").replace("{portName}", displayName);
+        }
 
         // 强制重新调整工作区大小，确保布局不变
         // 等DOM更新后再执行调整
@@ -2804,18 +2855,95 @@
           repositionUndoRedoButtons();
         }, 100);
 
-        // 设置读取器
-        reader = port.readable.getReader();
+        // 开始读取串口数据
         readSerialData();
 
-        // 设置写入器
-        writer = port.writable.getWriter();
+        // 连接成功后自动发送'w'指令获取IP地址
+        await sendWifiCommand();
 
       } catch (error)
       {
         console.error(getText("serialConnectionError"), error);
-        // 连接失败时重置按钮样式
-        resetQuickConnectButton();
+        // 连接失败时重置所有串口相关变量
+        port = null;
+        writer = null;
+        reader = null;
+        // 只有在没有WebSocket连接时才重置Quick Connect按钮
+        // 如果有currentDeviceIP，说明可能还有WebSocket连接，不重置按钮
+        if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+        {
+          resetQuickConnectButton();
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log('Reset Quick Connect button (no WebSocket connection)');
+          }
+        } else
+        {
+          // 如果有IP地址，保持按钮显示IP
+          updateQuickConnectButtonState(currentDeviceIP);
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log(`Kept Quick Connect button showing IP: ${currentDeviceIP}`);
+          }
+        }
+        // 抛出异常，让调用者知道连接失败
+        throw error;
+      }
+    }
+
+    // 快速关闭串口（用于验证失败时，不等待超时）
+    function quickCloseSerialPort()
+    {
+      try
+      {
+        if (reader)
+        {
+          reader.cancel().catch(() => { }); // 忽略错误
+          reader = null;
+        }
+
+        if (writer)
+        {
+          writer.close().catch(() => { }); // 忽略错误
+          writer = null;
+        }
+
+        if (port)
+        {
+          port.close().catch(() => { }); // 忽略错误
+          port = null;
+        }
+
+        // 快速重置UI状态
+        const serialInterface = document.getElementById('serialInterface');
+        if (serialInterface) serialInterface.style.display = 'none';
+
+        const serialContainer = document.getElementById('serialContainer');
+        if (serialContainer) serialContainer.classList.remove('connected');
+
+        const openSerialBtn = document.getElementById('openSerialBtn');
+        if (openSerialBtn) openSerialBtn.style.display = 'inline-flex';
+
+        const showSerialTimestampBtn = document.getElementById('showSerialTimestampBtn');
+        if (showSerialTimestampBtn) showSerialTimestampBtn.style.display = 'none';
+
+        const closeSerialBtn = document.getElementById('closeSerialBtn');
+        if (closeSerialBtn) closeSerialBtn.style.display = 'none';
+
+        const clearSerialBtn = document.getElementById('clearSerialBtn');
+        if (clearSerialBtn) clearSerialBtn.style.display = 'none';
+
+        // 重置串口监视器标题
+        const serialTitle = document.getElementById('serialOutputTitle');
+        if (serialTitle)
+        {
+          serialTitle.textContent = getText("serialOutput");
+        }
+
+        console.log('Quick serial port close completed');
+      } catch (error)
+      {
+        console.warn('Quick close error:', error);
       }
     }
 
@@ -2823,20 +2951,64 @@
     {
       try
       {
+        // 添加超时处理，防止硬件断开时卡住
+        const timeout = TIMEOUT_CONFIG.SERIAL.PORT_CLOSE_TIMEOUT; // 使用配置的端口关闭超时
+
         if (reader)
         {
-          await reader.cancel();
-          reader = null;
+          try
+          {
+            // 使用Promise.race添加超时
+            await Promise.race([
+              reader.cancel(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Reader cancel timeout')), TIMEOUT_CONFIG.SERIAL.READER_CANCEL_TIMEOUT))
+            ]);
+            console.log('Reader cancelled successfully');
+          } catch (readerError)
+          {
+            console.warn('Failed to cancel reader:', readerError);
+          } finally
+          {
+            reader = null;
+          }
         }
+
         if (writer)
         {
-          await writer.close();
-          writer = null;
+          try
+          {
+            // 使用Promise.race添加超时
+            await Promise.race([
+              writer.close(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Writer close timeout')), TIMEOUT_CONFIG.SERIAL.WRITER_CLOSE_TIMEOUT))
+            ]);
+            console.log('Writer closed successfully');
+          } catch (writerError)
+          {
+            console.warn('Failed to close writer:', writerError);
+          } finally
+          {
+            writer = null;
+          }
         }
+
         if (port)
         {
-          await port.close();
-          port = null;
+          try
+          {
+            // 使用Promise.race添加超时
+            await Promise.race([
+              port.close(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Port close timeout')), TIMEOUT_CONFIG.SERIAL.PORT_CLOSE_TIMEOUT))
+            ]);
+            console.log('Port closed successfully');
+          } catch (portError)
+          {
+            console.warn('Failed to close port:', portError);
+          } finally
+          {
+            port = null;
+          }
         }
 
         // 更新UI状态
@@ -2853,12 +3025,27 @@
         // 隐藏分隔线
         document.getElementById('console-serial-divider').style.display = 'none';
         document.getElementById('openSerialBtn').style.display = 'inline-flex'; // 显示连接按钮
+        document.getElementById('showSerialTimestampBtn').style.display = 'none'; // 隐藏时间戳按钮
         document.getElementById('closeSerialBtn').style.display = 'none'; // 隐藏关闭按钮
         document.getElementById('clearSerialBtn').style.display = 'none'; // 隐藏清除按钮
-        document.getElementById('quickConnectBtn').disabled = true; // 禁用快速连接按钮
 
-        // 重置Quick Connect按钮样式
-        resetQuickConnectButton();
+        // 重置串口监视器标题
+        const serialTitle = document.getElementById('serialOutputTitle');
+        if (serialTitle)
+        {
+          serialTitle.textContent = getText("serialOutput");
+        }
+
+        // 只有在没有WebSocket连接时才重置Quick Connect按钮
+        // 如果有currentDeviceIP，说明可能还有WebSocket连接，不重置按钮
+        if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+        {
+          resetQuickConnectButton();
+        } else
+        {
+          // 如果有IP地址，保持按钮显示IP
+          updateQuickConnectButtonState(currentDeviceIP);
+        }
 
         // 强制重新调整工作区大小
         setTimeout(function ()
@@ -2871,12 +3058,100 @@
         // currentDeviceIP = '192.168.4.1'; // 重置为默认IP
       } catch (error)
       {
-        console.error('关闭串口错误:', error);
+        console.error(getText("closeSerialError"), error);
       }
     }
 
     async function quickConnect()
     {
+      // 检查串口是否已连接
+      if (!port)
+      {
+        try
+        {
+          // 如果串口未连接，先尝试连接串口
+          await openSerialPort();
+        } catch (error)
+        {
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log('Serial port connection failed, trying configured IP...');
+          }
+
+          // 串口连接失败，尝试使用配置文件中的IP地址
+          const connectedWithConfig = await tryConnectWithConfigIP();
+
+          if (!connectedWithConfig)
+          {
+            // 如果配置的IP地址也连接失败，显示WiFi配置对话框
+            console.log('Both serial and configured IP failed, showing WiFi config dialog');
+            showWifiConfigDialog();
+            return; // 显示WiFi配置界面后退出
+          }
+        }
+      }
+
+      // 如果串口已连接，尝试发送WiFi命令获取IP地址
+      if (writer)
+      {
+        await sendWifiCommand();
+      }
+    }
+
+    function closeWifiDialog()
+    {
+      const dialog = document.querySelector('.wifi-dialog');
+      const overlay = document.querySelector('.overlay');
+      if (dialog) dialog.remove();
+      if (overlay) overlay.remove();
+    }
+
+    // 发送WiFi命令获取IP地址
+    async function sendWifiCommand()
+    {
+      if (!writer)
+      {
+        console.log(getText('noSerialWriterAvailable'));
+        showWifiConfigDialog();
+        return;
+      }
+
+      try
+      {
+        // 发送'w'指令获取IP地址
+        const command = 'w\n';
+        await writer.write(new TextEncoder().encode(command));
+        console.log(getText('wifiCommandSent'));
+
+        // 等待一段时间让设备响应
+        setTimeout(() =>
+        {
+          // 检查是否获取到了IP地址
+          if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+          {
+            // 如果没有获取到IP地址或获取到的是默认AP模式IP，显示WiFi配置界面
+            console.log(getText('noValidIPReceived'));
+            showWifiConfigDialog();
+          }
+        }, 3000); // 等待3秒
+
+      } catch (error)
+      {
+        console.error('Failed to send WiFi command:', error);
+        // 发送失败时显示WiFi配置界面
+        showWifiConfigDialog();
+      }
+    }
+
+    // 显示WiFi配置对话框
+    function showWifiConfigDialog()
+    {
+      // 检查是否已经存在对话框，避免重复创建
+      if (document.querySelector('.wifi-dialog'))
+      {
+        return;
+      }
+
       // 创建遮罩层
       const overlay = document.createElement('div');
       overlay.className = 'overlay';
@@ -2886,23 +3161,54 @@
       const dialog = document.createElement('div');
       dialog.className = 'wifi-dialog';
       dialog.innerHTML = `
-      <h3>${getText("wifiConfig")}</h3>
-      <input type="text" id="ssidInput" placeholder="${getText("ssidPlaceholder")}">
-      <input type="password" id="passwordInput" placeholder="${getText("passwordPlaceholder")}">
-      <div class="button-container">
-        <button class="cancel" onclick="closeWifiDialog()">${getText("cancel")}</button>
-        <button class="confirm" onclick="confirmWifiSettings()">${getText("confirm")}</button>
-      </div>
-    `;
+        <h3>${getText("wifiConfig")}</h3>
+        <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+          ${getText("wifiConfigDescription") || "Please enter your WiFi credentials to connect the robot to your network."}
+        </p>
+        <input type="text" id="ssidInput" placeholder="${getText("ssidPlaceholder")}" autocomplete="off">
+        <input type="password" id="passwordInput" placeholder="${getText("passwordPlaceholder")}" autocomplete="off">
+        <div class="button-container">
+          <button class="cancel" onclick="closeWifiDialog()">${getText("cancel")}</button>
+          <button class="confirm" onclick="confirmWifiSettings()">${getText("confirm")}</button>
+        </div>
+      `;
       document.body.appendChild(dialog);
-    }
 
-    function closeWifiDialog()
-    {
-      const dialog = document.querySelector('.wifi-dialog');
-      const overlay = document.querySelector('.overlay');
-      if (dialog) dialog.remove();
-      if (overlay) overlay.remove();
+      // 自动聚焦到SSID输入框
+      setTimeout(() =>
+      {
+        const ssidInput = document.getElementById('ssidInput');
+        if (ssidInput)
+        {
+          ssidInput.focus();
+        }
+      }, 100);
+
+      // 添加回车键支持
+      const ssidInput = document.getElementById('ssidInput');
+      const passwordInput = document.getElementById('passwordInput');
+
+      if (ssidInput)
+      {
+        ssidInput.addEventListener('keypress', function (e)
+        {
+          if (e.key === 'Enter')
+          {
+            passwordInput.focus();
+          }
+        });
+      }
+
+      if (passwordInput)
+      {
+        passwordInput.addEventListener('keypress', function (e)
+        {
+          if (e.key === 'Enter')
+          {
+            confirmWifiSettings();
+          }
+        });
+      }
     }
 
     // 重置Quick Connect按钮样式和文本为默认状态
@@ -2917,6 +3223,115 @@
       }
     }
 
+    // 更新快速连接按钮状态（统一管理函数）
+    function updateQuickConnectButtonState(ip = null)
+    {
+      const quickConnectBtn = document.getElementById('quickConnectBtn');
+      if (!quickConnectBtn) return;
+
+      if (ip)
+      {
+        // 显示IP地址（已连接状态）
+        quickConnectBtn.textContent = ip;
+        quickConnectBtn.style.backgroundColor = '#4CAF50';
+        quickConnectBtn.setAttribute('data-connected', 'true');
+      } else
+      {
+        // 显示默认文本（未连接状态）
+        quickConnectBtn.textContent = getText("quickConnect");
+        quickConnectBtn.style.backgroundColor = '';
+        quickConnectBtn.removeAttribute('data-connected');
+      }
+    }
+
+    // 语言切换时处理快速连接按钮状态
+    function handleQuickConnectButtonOnLanguageChange()
+    {
+      const quickConnectBtn = document.getElementById('quickConnectBtn');
+      if (!quickConnectBtn) return;
+
+      if (quickConnectBtn.hasAttribute('data-connected'))
+      {
+        // 如果按钮标记为已连接，检查是否有有效的IP地址
+        if (currentDeviceIP && currentDeviceIP !== '192.168.4.1')
+        {
+          // 有有效的IP地址，保持显示IP地址
+          quickConnectBtn.textContent = currentDeviceIP;
+        } else
+        {
+          // 没有有效的IP地址，重置为未连接状态
+          quickConnectBtn.textContent = getText("quickConnect");
+          quickConnectBtn.removeAttribute('data-connected');
+          quickConnectBtn.style.backgroundColor = '';
+        }
+      } else
+      {
+        // 如果按钮未连接，更新为当前语言的文本
+        quickConnectBtn.textContent = getText("quickConnect");
+      }
+    }
+
+    // 将函数暴露到全局作用域，供translations.js调用
+    window.handleQuickConnectButtonOnLanguageChange = handleQuickConnectButtonOnLanguageChange;
+
+    // 显示通知消息
+    function showNotification(message, type = 'info')
+    {
+      // 创建通知元素
+      const notification = document.createElement('div');
+      notification.className = `notification ${type}`;
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        color: white;
+        font-size: 14px;
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+      `;
+
+      // 根据类型设置颜色
+      switch (type)
+      {
+        case 'success':
+          notification.style.backgroundColor = '#4CAF50';
+          break;
+        case 'error':
+          notification.style.backgroundColor = '#f44336';
+          break;
+        case 'warning':
+          notification.style.backgroundColor = '#ff9800';
+          break;
+        default:
+          notification.style.backgroundColor = '#2196F3';
+      }
+
+      notification.textContent = message;
+      document.body.appendChild(notification);
+
+      // 3秒后自动移除
+      setTimeout(() =>
+      {
+        if (notification.parentNode)
+        {
+          notification.style.opacity = '0';
+          notification.style.transform = 'translateX(100%)';
+          setTimeout(() =>
+          {
+            if (notification.parentNode)
+            {
+              notification.parentNode.removeChild(notification);
+            }
+          }, 300);
+        }
+      }, 3000);
+    }
+
     async function confirmWifiSettings()
     {
       const ssid = document.getElementById('ssidInput').value.trim();
@@ -2924,31 +3339,253 @@
 
       if (!ssid)
       {
-        alert(getText("enterWifiName"));
+        alert(getText("enterWifiName") || "Please enter WiFi name");
         return;
       }
 
-      const command = `w % ${ssid}% ${password} \n`;
+      // 显示加载状态
+      const confirmBtn = document.querySelector('.wifi-dialog .confirm');
+      const originalText = confirmBtn.textContent;
+      confirmBtn.textContent = getText("connecting") || "Connecting...";
+      confirmBtn.disabled = true;
+
+      const command = `w%${ssid}%${password}\n`;
 
       try
       {
-        await writer.write(new TextEncoder().encode(command));
+        if (writer)
+        {
+          await writer.write(new TextEncoder().encode(command));
+          console.log(getText('wifiConfigCommandSent'));
+        }
+        else
+        {
+          console.log(getText('noSerialWriterButSettingsSaved'));
+        }
+
         closeWifiDialog();
 
-        // 确保按钮状态正确 - Wifi配置可能意味着连接已建立
-        if (!document.getElementById('closeSerialBtn').style.display ||
-          document.getElementById('closeSerialBtn').style.display === 'none')
+        // 显示成功消息
+        showNotification(getText("wifiConfigSent") || "WiFi configuration sent successfully. The robot will reboot and connect to your network.", 'success');
+
+        // 等待一段时间后尝试连接
+        setTimeout(async () =>
         {
-          // 如果关闭按钮不可见，则现在应该显示
-          document.getElementById('openSerialBtn').style.display = 'none';
-          document.getElementById('closeSerialBtn').style.display = 'inline-flex';
-        }
+          console.log(getText('attemptingConnectAfterWifiConfig'));
+          // 尝试使用新的WiFi配置连接
+          await tryConnectWithConfigIP();
+        }, 5000); // 等待5秒让设备重启并连接
+
       } catch (error)
       {
-        console.error(getText("wifiCommandError"), error);
-        alert(getText("wifiCommandFailed"));
-        // 连接失败时重置按钮
-        resetQuickConnectButton();
+        console.error(getText("wifiCommandError") || "WiFi command error:", error);
+
+        // 恢复按钮状态
+        confirmBtn.textContent = originalText;
+        confirmBtn.disabled = false;
+
+        // 显示错误消息
+        showNotification(getText("wifiCommandFailed") || "Failed to send WiFi configuration. Please check your serial connection.", 'error');
+      }
+    }
+
+
+
+
+
+    // 测试串口选择窗口居中显示
+    function testPortSelectorCentering()
+    {
+      console.log("Testing port selector centering...");
+
+      // 创建测试端口数据
+      const testPorts = [
+        { getInfo: () => ({ usbVendorId: 0x1a86, usbProductId: 0x7523 }) },
+        { getInfo: () => ({ usbVendorId: 0x10c4, usbProductId: 0xea60 }) }
+      ];
+
+      // 显示测试对话框
+      createESP32PortSelector(testPorts).then(port =>
+      {
+        console.log("Test port selected:", port);
+      }).catch(error =>
+      {
+        console.log("Test cancelled or failed:", error);
+      });
+    }
+
+    // 显示自定义警告窗口
+    function showCustomAlert(message, title = null)
+    {
+      return new Promise((resolve) =>
+      {
+        // 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.className = 'alert-overlay';
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'alert-dialog';
+
+        // 处理换行符，将\n转换为<br>标签
+        const formattedMessage = message.replace(/\n/g, '<br>');
+
+        // 直接设置内容，避免innerHTML的性能开销
+        const h3 = document.createElement('h3');
+        h3.textContent = title || getText("error");
+
+        const p = document.createElement('p');
+        p.innerHTML = formattedMessage;
+
+        const button = document.createElement('button');
+        button.textContent = getText("ok");
+        button.onclick = () =>
+        {
+          document.body.removeChild(overlay);
+          resolve();
+        };
+
+        dialog.appendChild(h3);
+        dialog.appendChild(p);
+        dialog.appendChild(button);
+
+        // 将对话框添加到遮罩层中
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+      });
+    }
+
+    // 添加串口消息到监视器
+    function addSerialMessage(message)
+    {
+      const outputDiv = document.getElementById('serialOutput');
+      if (!outputDiv) return;
+
+      const currentTime = Date.now();
+
+      // 创建时间戳容器
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'timestamp';
+      timestampSpan.textContent = showSerialTimestamp ? `${getFormattedTimestamp()} ` : '';
+      timestampSpan.style.display = showSerialTimestamp ? 'inline' : 'none';
+      timestampSpan.style.color = '#888';
+      timestampSpan.style.fontWeight = 'normal';
+
+      // 创建消息内容容器
+      const messageSpan = document.createElement('span');
+      messageSpan.className = 'message-content';
+      messageSpan.textContent = message;
+      messageSpan.style.color = '#fff';
+
+      // 创建容器div
+      const lineDiv = document.createElement('div');
+      lineDiv.style.padding = '3px 0';
+      lineDiv.style.marginBottom = '3px';
+      lineDiv.style.fontSize = '13px';
+      lineDiv.style.whiteSpace = 'nowrap';
+      lineDiv.style.lineHeight = '1.3';
+
+      // 将时间戳和消息添加到容器中
+      lineDiv.appendChild(timestampSpan);
+      lineDiv.appendChild(messageSpan);
+
+      outputDiv.appendChild(lineDiv);
+
+      // 滚动到底部
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+
+      // 更新最后消息时间
+      lastSerialMessageTime = currentTime;
+    }
+
+
+
+    // 验证串口连接 - 发送'?'字符并检查回复
+    async function validateSerialConnection()
+    {
+      try
+      {
+        // 清空之前的缓冲区
+        serialBufferText = '';
+        serialBuffer = '';
+
+        // 发送'?'字符
+        const encoder = new TextEncoder();
+        const data = encoder.encode('?');
+        await writer.write(data);
+        console.log(getText("sentValidationCommand"));
+
+        // 根据操作系统设置等待时间
+        const os = OPERATING_SYSTEM;
+        const waitTime = (os === 'windows') ? TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_WINDOWS : TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_OTHER; // 使用配置的验证超时时间
+
+        const startTime = Date.now();
+        let response = '';
+        let validationTimeout = false;
+
+        // 设置超时时间
+        const timeoutPromise = new Promise((resolve) =>
+        {
+          setTimeout(() =>
+          {
+            validationTimeout = true;
+            resolve();
+          }, waitTime);
+        });
+
+        // 等待回复或超时
+        const responsePromise = new Promise(async (resolve) =>
+        {
+          while (!validationTimeout && Date.now() - startTime < waitTime)
+          {
+            try
+            {
+              const { value, done } = await reader.read();
+              if (done) break;
+
+              const text = new TextDecoder().decode(value);
+              response += text;
+
+              // 检查是否包含Petoi设备标识
+              if (response.includes('Bittle') || response.includes('Nybble') || response.includes('Petoi') || response.includes('Chero'))
+              {
+                // 提取设备型号信息用于控制台显示
+                const cleanResponse = response.replace(/[\r\n?]+/g, ' ').trim();
+                const modelInfo = cleanResponse.replace(/\s*\?\s*$/, '').trim();
+                console.log(getText("model") + ":", modelInfo);
+
+                resolve(true);
+                return;
+              }
+
+              // 如果已经超过等待时间，停止等待
+              if (Date.now() - startTime >= waitTime)
+              {
+                break;
+              }
+            } catch (error)
+            {
+              console.warn("Error reading during validation:", error);
+              break;
+            }
+          }
+          resolve(false);
+        });
+
+        // 等待第一个完成的Promise
+        const result = await Promise.race([responsePromise, timeoutPromise]);
+
+        if (validationTimeout)
+        {
+          console.log(getText("serialValidationTimeout"));
+          return false;
+        }
+
+        return result;
+      } catch (error)
+      {
+        console.error(getText("serialValidationError"), error);
+        return false;
       }
     }
 
@@ -2965,93 +3602,389 @@
             break;
           }
           const text = new TextDecoder().decode(value);
-          serialBuffer += text;
+          if (!text) continue; // 如果没有数据，跳过
+          serialBufferText += text;
+          const lastLineIndex = serialBufferText.lastIndexOf('\r\n');
+          const linesText = serialBufferText.substring(0, lastLineIndex) + '\r\n';
+          const lines = linesText.split('\r\n');
+          serialBufferText = serialBufferText.substring(lastLineIndex + 2); // 保留剩余部分
+          serialBuffer += text; // 添加到serialBuffer
 
-          // 取消任何正在进行的IP检查定时器
-          if (ipCheckTimer)
+          // 监听特定格式的输出：类似 "=\r\n4894\r\nR\r\n" 的格式
+          // 改进的数据解析逻辑，防止数据分割问题
+          const patternMatch = linesText.match(/=\r\n([^\r\n]+)\r\n[a-zA-Z]{1}\r\n/);
+          if (patternMatch)
           {
-            clearTimeout(ipCheckTimer);
-            ipCheckTimer = null;
+            // 提取第二行内容（第一行是"="，第二行是数字，第三行是"R"）
+            const secondLine = patternMatch[1];
+
+            // 验证数据完整性：确保是纯数字
+            if (/^\d+$/.test(secondLine))
+            {
+              addConsoleMessage(secondLine);
+            } else
+            {
+              console.warn('检测到不完整的传感器数据:', secondLine);
+              // 不输出不完整的数据，等待完整数据包
+            }
           }
 
-          // 检查是否找到"IP Address:"字符串
-          const ipAddressPosition = serialBuffer.indexOf("IP Address:");
-          if (ipAddressPosition !== -1)
+          // 改进的缓冲区管理，防止内存泄漏和数据丢失
+          if (serialBuffer.length > 20000) // 增加缓冲区大小
           {
-            // 找到IP地址前缀，提取后续内容检查
-            const afterPrefix = serialBuffer.substring(ipAddressPosition + "IP Address:".length).trim();
+            // 保留最后10000个字符，确保不丢失重要数据
+            serialBuffer = serialBuffer.substring(serialBuffer.length - 10000);
+            console.warn('串口缓冲区已清理，保留最新数据');
+          }
 
-            // 使用更宽松的正则表达式先找出可能的IP地址
-            const possibleIPMatch = afterPrefix.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-
+          for (let line of lines.reverse())
+          {
+            // 检查是否找到"IP Address:"字符串
+            const ipAddressPosition = line.indexOf("IP Address:");
+            const afterPrefix = line.substring(ipAddressPosition).trim();
+            const possibleIPMatch = afterPrefix.match(/^IP Address:\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
             if (possibleIPMatch)
             {
-              const possibleIP = possibleIPMatch[1];
-
-              // 检查该IP地址后是否紧跟着还有数字，如果有可能是不完整的
-              const afterIP = afterPrefix.substring(possibleIP.length);
-              const hasMoreDigits = /^\d/.test(afterIP);
-
-              if (hasMoreDigits)
+              // 取消任何正在进行的IP检查定时器
+              if (ipCheckTimer)
               {
-                // 后面还有数字，可能是不完整的IP，暂时不处理，等待更多数据
-                console.log(getText("incompleteIPDetected").replace("{ip}", possibleIP));
-                lastPartialIP = possibleIP;
-              } else
-              {
-                // 延迟处理IP地址，等待可能的后续数据片段
-                lastPartialIP = possibleIP;
-
-                // 设置延迟处理定时器 (100ms)
-                ipCheckTimer = setTimeout(() =>
-                {
-                  processDetectedIP(lastPartialIP);
-                  ipCheckTimer = null;
-                  lastPartialIP = null;
-                }, 100);
+                clearTimeout(ipCheckTimer);
+                ipCheckTimer = null;
               }
+
+              const possibleIP = possibleIPMatch[1];
+              // 延迟处理IP地址，等待可能的后续数据片段
+              lastPartialIP = possibleIP;
+
+              // 设置延迟处理定时器 (100ms)
+              ipCheckTimer = setTimeout(() =>
+              {
+                processDetectedIP(lastPartialIP);
+                ipCheckTimer = null;
+                lastPartialIP = null;
+              }, TIMEOUT_CONFIG.UI.IP_CHECK_DELAY);
+              break; // 找到IP地址后跳出循环
             }
           }
 
-          // 更新输出显示，确保每条消息后面都有换行符
-          const outputDiv = document.getElementById('serialOutput');
-          // 修复：优化换行符处理，避免产生过多空行
-          // 1. 将连续的换行符替换为单个换行
-          // 2. 只在文本末尾不是换行符时添加换行
-          const processedText = text.replace(/\n{2,}/g, '\n');
+          // 将数据添加到缓冲区
+          serialOutputBuffer += text;
 
-          // 只拼接内容，不使用innerHTML直接累加，避免渲染问题
-          const textNode = document.createTextNode(processedText);
-          const fragment = document.createDocumentFragment();
-
-          // 将文本内容分行，逐行添加
-          processedText.split('\n').forEach((line, index, array) =>
+          // 检查缓冲区中是否包含换行符
+          if (serialOutputBuffer.includes('\n'))
           {
-            if (index > 0)
+            // 如果有换行符，立即处理到换行符为止的数据
+            processSerialOutputBufferWithNewlines();
+          } else
+          {
+            // 如果没有换行符，使用延时缓冲
+            if (serialOutputTimer)
             {
-              fragment.appendChild(document.createElement('br'));
+              clearTimeout(serialOutputTimer);
             }
-            if (line)
+            serialOutputTimer = setTimeout(() =>
             {
-              fragment.appendChild(document.createTextNode(line));
-            }
-          });
-
-          outputDiv.appendChild(fragment);
-
-          // 立即滚动到底部，不使用setTimeout
-          outputDiv.scrollTop = outputDiv.scrollHeight;
-          // 强制DOM重绘
-          void outputDiv.offsetHeight;
+              processSerialOutputBuffer();
+            }, TIMEOUT_CONFIG.UI.SERIAL_OUTPUT_BUFFER_DELAY);
+          }
         }
       } catch (error)
       {
         console.error(getText("serialReadError"), error);
+
+        // 检测硬件断开连接
+        if (error.name === 'NetworkError' ||
+          error.message.includes('failed to read') ||
+          error.message.includes('device disconnected') ||
+          error.message.includes('connection lost'))
+        {
+          console.log(getText('hardwareDisconnected'));
+
+          // 重置串口相关变量
+          reader = null;
+          writer = null;
+          port = null;
+
+          // 更新UI状态，隐藏串口界面
+          const serialInterface = document.getElementById('serialInterface');
+          if (serialInterface)
+          {
+            serialInterface.style.display = 'none';
+          }
+
+          // 移除connected类，恢复串口容器默认样式
+          const serialContainer = document.getElementById('serialContainer');
+          if (serialContainer)
+          {
+            serialContainer.classList.remove('connected');
+          }
+
+          // 隐藏分隔线
+          const divider = document.getElementById('console-serial-divider');
+          if (divider)
+          {
+            divider.style.display = 'none';
+          }
+
+          // 调整控制台和串口区域的比例
+          const consoleWindow = document.getElementById('consoleWindow');
+          if (consoleWindow)
+          {
+            consoleWindow.style.flex = '90';
+          }
+          if (serialContainer)
+          {
+            serialContainer.style.flex = '10';
+          }
+
+          // 更新按钮状态
+          const openSerialBtn = document.getElementById('openSerialBtn');
+          const showSerialTimestampBtn = document.getElementById('showSerialTimestampBtn');
+          const closeSerialBtn = document.getElementById('closeSerialBtn');
+          const clearSerialBtn = document.getElementById('clearSerialBtn');
+
+          if (openSerialBtn) openSerialBtn.style.display = 'inline-flex';
+          if (showSerialTimestampBtn) showSerialTimestampBtn.style.display = 'none';
+          if (closeSerialBtn) closeSerialBtn.style.display = 'none';
+          if (clearSerialBtn) clearSerialBtn.style.display = 'none';
+
+          // 重置串口监视器标题
+          const serialTitle = document.getElementById('serialOutputTitle');
+          if (serialTitle)
+          {
+            serialTitle.textContent = getText("serialOutput");
+          }
+
+          // 只有在没有WebSocket连接时才重置Quick Connect按钮
+          // 如果有currentDeviceIP，说明可能还有WebSocket连接，不重置按钮
+          if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+          {
+            resetQuickConnectButton();
+            if (typeof showDebug !== 'undefined' && showDebug)
+            {
+              console.log('Reset Quick Connect button (no WebSocket connection)');
+            }
+          } else
+          {
+            // 如果有IP地址，保持按钮显示IP
+            updateQuickConnectButtonState(currentDeviceIP);
+            if (typeof showDebug !== 'undefined' && showDebug)
+            {
+              console.log(`Kept Quick Connect button showing IP: ${currentDeviceIP}`);
+            }
+          }
+
+          // 强制重新调整工作区大小
+          setTimeout(function ()
+          {
+            resizeBlocklyWorkspace();
+            repositionUndoRedoButtons();
+          }, 100);
+
+          console.log(getText('serialConnectionCleanupCompleted'));
+        }
       }
     }
 
+    // 处理串口输出缓冲区（带换行符的智能处理）
+    function processSerialOutputBufferWithNewlines()
+    {
+      if (!serialOutputBuffer.trim())
+      {
+        return;
+      }
+
+      const outputDiv = document.getElementById('serialOutput');
+      const showSerialTimestamp = document.getElementById('showSerialTimestampBtn').classList.contains('active');
+      const currentTime = Date.now();
+      const timeSinceLastMessage = currentTime - lastSerialMessageTime;
+
+      // 找到第一个换行符的位置
+      const newlineIndex = serialOutputBuffer.indexOf('\n');
+      if (newlineIndex === -1)
+      {
+        return; // 没有换行符，不应该调用这个函数
+      }
+
+      // 提取到换行符为止的完整消息
+      const completeMessage = serialOutputBuffer.substring(0, newlineIndex + 1);
+      // 保留剩余的数据
+      serialOutputBuffer = serialOutputBuffer.substring(newlineIndex + 1);
+
+      // 检查是否需要添加换行符（如果离上次收到消息超过100ms）
+      const needNewLine = timeSinceLastMessage > 100;
+
+      // 如果时间间隔超过100ms，添加换行符
+      if (needNewLine)
+      {
+        outputDiv.appendChild(document.createElement('br'));
+      }
+
+      // 处理完整消息
+      const lines = completeMessage.split('\n');
+      let isFirstLine = true;
+
+      lines.forEach((line, index) =>
+      {
+        // 跳过空行
+        if (line.trim() === '' && index === lines.length - 1)
+        {
+          return;
+        }
+
+        // 检查是否需要添加timestamp
+        let needTimestamp = false;
+        if (isFirstLine)
+        {
+          // 第一行：总是添加timestamp（新消息的开始）
+          needTimestamp = true;
+          isFirstLine = false;
+        } else
+        {
+          // 后续行：如果换行后要显示的是可显示字符，则加timestamp
+          needTimestamp = line.trim().length > 0;
+        }
+
+        if (line.trim() !== '')
+        {
+          // 创建时间戳容器
+          const timestampSpan = document.createElement('span');
+          timestampSpan.className = 'timestamp';
+          timestampSpan.textContent = needTimestamp ? `${getFormattedTimestamp()} ` : '';
+          timestampSpan.style.display = (showSerialTimestamp && needTimestamp) ? 'inline' : 'none';
+          timestampSpan.style.color = '#888';
+          timestampSpan.style.fontWeight = 'normal';
+
+          // 创建消息内容容器
+          const messageSpan = document.createElement('span');
+          messageSpan.className = 'message-content';
+          messageSpan.textContent = line;
+          messageSpan.style.color = '#fff';
+
+          // 创建容器div
+          const lineDiv = document.createElement('div');
+          lineDiv.style.padding = '3px 0';
+          lineDiv.style.marginBottom = '3px';
+          lineDiv.style.fontSize = '13px';
+          lineDiv.style.whiteSpace = 'nowrap';
+          lineDiv.style.lineHeight = '1.3';
+
+          // 将时间戳和消息添加到容器中
+          lineDiv.appendChild(timestampSpan);
+          lineDiv.appendChild(messageSpan);
+
+          outputDiv.appendChild(lineDiv);
+
+          // 每换行一次就重置时间，避免累积导致错误换行
+          lastSerialMessageTime = currentTime;
+        }
+      });
+
+      // 立即滚动到底部
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+      // 强制DOM重绘
+      void outputDiv.offsetHeight;
+
+      // 如果缓冲区中还有数据，继续处理
+      if (serialOutputBuffer.includes('\n'))
+      {
+        processSerialOutputBufferWithNewlines();
+      }
+    }
+
+    // 处理串口输出缓冲区（延时处理）
+    function processSerialOutputBuffer()
+    {
+      if (!serialOutputBuffer.trim())
+      {
+        return;
+      }
+
+      const outputDiv = document.getElementById('serialOutput');
+      const showSerialTimestamp = document.getElementById('showSerialTimestampBtn').classList.contains('active');
+      const currentTime = Date.now();
+      const timeSinceLastMessage = currentTime - lastSerialMessageTime;
+
+      // 检查是否需要添加换行符（如果离上次收到消息超过100ms）
+      const needNewLine = timeSinceLastMessage > 100;
+
+      // 如果时间间隔超过100ms，添加换行符
+      if (needNewLine)
+      {
+        outputDiv.appendChild(document.createElement('br'));
+      }
+
+      // 处理文本内容，正确处理换行符
+      const textLines = serialOutputBuffer.split('\n');
+      let isFirstLine = true;
+
+      textLines.forEach((line, index) =>
+      {
+        // 跳过空行
+        if (line.trim() === '' && index === textLines.length - 1)
+        {
+          return;
+        }
+
+        // 检查是否需要添加timestamp
+        let needTimestamp = false;
+        if (isFirstLine)
+        {
+          // 第一行：总是添加timestamp（新消息的开始）
+          needTimestamp = true;
+          isFirstLine = false;
+        } else
+        {
+          // 后续行：如果换行后要显示的是可显示字符，则加timestamp
+          needTimestamp = line.trim().length > 0;
+        }
+
+        if (line.trim() !== '')
+        {
+          // 创建时间戳容器
+          const timestampSpan = document.createElement('span');
+          timestampSpan.className = 'timestamp';
+          timestampSpan.textContent = needTimestamp ? `${getFormattedTimestamp()} ` : '';
+          timestampSpan.style.display = (showSerialTimestamp && needTimestamp) ? 'inline' : 'none';
+          timestampSpan.style.color = '#888';
+          timestampSpan.style.fontWeight = 'normal';
+
+          // 创建消息内容容器
+          const messageSpan = document.createElement('span');
+          messageSpan.className = 'message-content';
+          messageSpan.textContent = line;
+          messageSpan.style.color = '#fff';
+
+          // 创建容器div
+          const lineDiv = document.createElement('div');
+          lineDiv.style.padding = '3px 0';
+          lineDiv.style.marginBottom = '3px';
+          lineDiv.style.fontSize = '13px';
+          lineDiv.style.whiteSpace = 'nowrap';
+          lineDiv.style.lineHeight = '1.3';
+
+          // 将时间戳和消息添加到容器中
+          lineDiv.appendChild(timestampSpan);
+          lineDiv.appendChild(messageSpan);
+
+          outputDiv.appendChild(lineDiv);
+
+          // 每换行一次就重置时间，避免累积导致错误换行
+          lastSerialMessageTime = currentTime;
+        }
+      });
+
+      // 清空缓冲区
+      serialOutputBuffer = '';
+
+      // 立即滚动到底部
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+      // 强制DOM重绘
+      void outputDiv.offsetHeight;
+    }
+
     // 处理检测到的IP地址
-    function processDetectedIP(ip)
+    async function processDetectedIP(ip)
     {
       if (!ip) return;
 
@@ -3075,13 +4008,7 @@
           currentDeviceIP = ip;
 
           // 修改Quick Connect按钮样式和文本
-          const quickConnectBtn = document.getElementById('quickConnectBtn');
-          if (quickConnectBtn)
-          {
-            quickConnectBtn.textContent = ip;
-            quickConnectBtn.style.backgroundColor = '#4CAF50'; // 绿色背景
-            quickConnectBtn.setAttribute('data-connected', 'true'); // 标记连接状态
-          }
+          updateQuickConnectButtonState(ip);
 
           // 查找工作区中的make_connection积木块并更新IP地址
           const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
@@ -3090,24 +4017,16 @@
             // 更新第一个make_connection积木块的IP_ADDRESS字段
             makeConnectionBlocks[0].setFieldValue(ip, 'IP_ADDRESS');
           }
-        }
 
-        // 从缓冲区中清除已处理的IP地址部分
-        const ipPosition = serialBuffer.indexOf('IP Address: ' + ip);
-        if (ipPosition !== -1)
-        {
-          serialBuffer = serialBuffer.substring(0, ipPosition) +
-            serialBuffer.substring(ipPosition + ('IP Address: ' + ip).length);
+          // 如果获取到IP地址，关闭可能存在的WiFi配置对话框
+          closeWifiDialog();
+
+          // 保存到配置文件
+          await saveConfig();
         }
       } else
       {
         console.log(getText("invalidIPFormat").replace("{ip}", ip));
-      }
-
-      // 如果缓冲区过大，防止内存泄漏
-      if (serialBuffer.length > 10000)
-      {
-        serialBuffer = serialBuffer.substring(serialBuffer.length - 5000);
       }
     }
 
@@ -3154,6 +4073,18 @@
     {
       const outputDiv = document.getElementById('serialOutput');
       outputDiv.innerHTML = '';
+      // 重置缓冲区
+      serialBufferText = '';
+      serialBuffer = '';
+      serialOutputBuffer = '';
+      // 重置时间变量
+      lastSerialMessageTime = 0;
+      // 清除定时器
+      if (serialOutputTimer)
+      {
+        clearTimeout(serialOutputTimer);
+        serialOutputTimer = null;
+      }
     }
 
     // 添加回车键发送功能
@@ -3324,6 +4255,13 @@
       // 控制台占据大部分空间，串口区域只占据底部一小部分
       consoleWindow.style.flex = '90';
       serialContainer.style.flex = '10';
+
+      // 初始化debug开关状态
+      const debugBtn = document.getElementById('showDebugBtn');
+      if (debugBtn)
+      {
+        showDebug = debugBtn.classList.contains('active');
+      }
 
       let isResizing = false;
       let initialX, initialWidth;

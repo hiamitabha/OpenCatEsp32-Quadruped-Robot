@@ -165,7 +165,7 @@ void setup(void) {
   // Print the IP get from DHCP Server of your Router
   Serial.println("");
   Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP().toString());
 
   // HTTP server started with handlers
   server.on("/", handleMainPage);

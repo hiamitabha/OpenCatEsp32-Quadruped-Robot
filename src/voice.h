@@ -26,6 +26,7 @@
 
 // #define VOICE_MODULE_SAMPLE
 String customizedCmdList[] = {
+  // "rg",
   "fl",  // learn skill with feedback servos
   "fr",  // replay skill learned with feedback servos
   "fF",  // movement follower demo with feedback servos

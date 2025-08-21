@@ -78,7 +78,7 @@ bool configureWiFiViaSerial() {
 
         if (WiFi.status() == WL_CONNECTED) {
           Serial.print("IP Address: ");
-          Serial.println(WiFi.localIP());
+          Serial.println(WiFi.localIP().toString());
           return true;
         } else {
           Serial.println("connection failed");
@@ -111,7 +111,7 @@ void setupWiFi() {
     ESP.restart();
   }
   Serial.println("已成功连接到WiFi");
-  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP().toString());
 }
 
 // 设备启动时的初始化函数

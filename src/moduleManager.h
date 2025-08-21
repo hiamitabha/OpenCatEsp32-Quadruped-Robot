@@ -148,9 +148,9 @@ void initModule(char moduleCode) {
       {
         updateGyroQ = false;
         i2cDetect(Wire);
-#if defined BiBoard_V1_0 && !defined NYBBLE
-        i2cDetect(Wire1);
-#endif
+// #if defined BiBoard_V1_0 && !defined NYBBLE
+//         i2cDetect(Wire1);
+// #endif
         loadBySkillName("sit");
         if (!cameraSetup()) {
           int i = indexOfModule(moduleCode);
@@ -274,28 +274,56 @@ void reconfigureTheActiveModule(char *moduleCode) {
     return;
   }
   bool statusChangedQ = false;
+  
+  // Determine target module and operation type based on the elegant original design
+  char targetModule = moduleCode[0];
+  bool isCloseOnlyOperation = false;
+  
+  // Handle 'X' or 'X~' -> close all
+  if (strlen(moduleCode) == 0 || (strlen(moduleCode) >= 1 && (moduleCode[0] == '~' || moduleCode[0] == '\n'))) {
+    targetModule = '-'; // Use '-' to represent close all, avoiding confusion
+  }
+  // Handle 'Xc' -> close specific module (lowercase)
+  else if (strlen(moduleCode) >= 1 && islower(moduleCode[0])) {
+    targetModule = toupper(moduleCode[0]); // Convert to uppercase for module identification
+    isCloseOnlyOperation = true; // Only close this specific module, don't enable anything
+  }
+  // Handle 'XC' -> enable specific module (uppercase) - use original logic
+  
   // PTHL("mode", moduleCode);                                          // negative number will deactivate all the modules
   for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {                                               // disable unneeded modules
-    if (moduleActivatedQ[i] && moduleList[i] != moduleCode[0]) {                                               // if the modules is active and different from the new module
-      if ((moduleList[i] == EXTENSION_VOICE || moduleList[i] == EXTENSION_BACKTOUCH) && moduleCode[0] != '~')  // it won't disable the voice and backtouch
-        continue;
-      PTHL("- disable", moduleNames[i]);
-      stopModule(moduleList[i]);
-      moduleActivatedQ[i] = false;
-      statusChangedQ = true;
+    if (!moduleActivatedQ[i]) continue;
+    
+    // For lowercase: only process target module; For original logic: only process non-target modules
+    if ((isCloseOnlyOperation && moduleList[i] != targetModule) || 
+        (!isCloseOnlyOperation && moduleList[i] == targetModule)) continue;
+    
+    // Original logic: protect voice and backtouch unless closing all
+    if (!isCloseOnlyOperation && 
+        (moduleList[i] == EXTENSION_VOICE || moduleList[i] == EXTENSION_BACKTOUCH) && 
+        targetModule != '-') continue;
+    
+    // Unified disable logic
+    PTHL("- disable", moduleNames[i]);
+    stopModule(moduleList[i]);
+    moduleActivatedQ[i] = false;
+    statusChangedQ = true;
 #ifdef I2C_EEPROM_ADDRESS
-      i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, false);
+    i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, false);
 #endif
-    }
   }
 #ifndef I2C_EEPROM_ADDRESS
   config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
 #endif
-  for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {
-    if (moduleList[i] == moduleCode[0] && !moduleActivatedQ[i]) {
-      PTHL("+  enable", moduleNames[i]);
-      initModule(moduleList[i]);
-      statusChangedQ = true;
+  
+  // Original logic: enable target module (skip for close-only operations)
+  if (!isCloseOnlyOperation) {
+    for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {
+      if (moduleList[i] == targetModule && !moduleActivatedQ[i]) {
+        PTHL("+  enable", moduleNames[i]);
+        initModule(moduleList[i]);
+        statusChangedQ = true;
+      }
     }
   }
   if (statusChangedQ)  // if the status of the modules has changed, show the new status
