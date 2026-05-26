@@ -1,7 +1,7 @@
 // #include <Wire.h>
 
-#define MU_CAMERA
-#define SENTRY1_CAMERA
+//#define MU_CAMERA
+//#define SENTRY1_CAMERA
 #define GROVE_VISION_AI_V2
 // #define TALL_TARGET
 
@@ -715,26 +715,26 @@ void read_GroveVision() {
       height = AI.boxes()[0].h;  // read height value
       updateCoordinateLock = false;
       detectedObjectQ = true;
-      // if (cameraPrintQ)
-      // {
-      //   for (int i = 0; i < AI.boxes().size(); i++)
-      //   {
-      //     Serial.print("Box[");
-      //     Serial.print(i);
-      //     Serial.print("] target=");
-      //     Serial.print(AI.boxes()[i].target);
-      //     Serial.print(", score=");
-      //     Serial.print(AI.boxes()[i].score);
-      //     Serial.print(", x=");
-      //     Serial.print(AI.boxes()[i].x);
-      //     Serial.print(", y=");
-      //     Serial.print(AI.boxes()[i].y);
-      //     Serial.print(", w=");
-      //     Serial.print(AI.boxes()[i].w);
-      //     Serial.print(", h=");
-      //     Serial.println(AI.boxes()[i].h);
-      //   }
-      // }
+      if (cameraPrintQ)
+      {
+        for (int i = 0; i < AI.boxes().size(); i++)
+        {
+          Serial.print("Box[");
+          Serial.print(i);
+          Serial.print("] target=");
+          Serial.print(AI.boxes()[i].target);
+          Serial.print(", score=");
+          Serial.print(AI.boxes()[i].score);
+          Serial.print(", x=");
+          Serial.print(AI.boxes()[i].x);
+          Serial.print(", y=");
+          Serial.print(AI.boxes()[i].y);
+          Serial.print(", w=");
+          Serial.print(AI.boxes()[i].w);
+          Serial.print(", h=");
+          Serial.println(AI.boxes()[i].h);
+        }
+      }
       if (cameraPrintQ == 2 && cameraTaskActiveQ) 
       {
         FPS();
