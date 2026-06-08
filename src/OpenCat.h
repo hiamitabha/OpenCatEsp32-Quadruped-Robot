@@ -77,7 +77,7 @@
 #define BOARD "B"
 #endif
 
-#define DATE "250818"  // YYMMDD
+#define DATE "260522"  // YYMMDD
 String SoftwareVersion = "";
 String uniqueName = "";
 
@@ -88,7 +88,9 @@ String uniqueName = "";
 #define BIRTHMARK '@'  // Send '!' token to reset the birthmark in the EEPROM so that the robot will know to restart and reset
 #define BT_BLE  // toggle Bluetooth Low Energy (BLE）
 #define BT_SSP  // toggle Bluetooth Secure Simple Pairing (BT_SSP)
-// #define WEB_SERVER // toggle web server
+// #define WIFI_MANAGER  // toggle WiFi Manager. It should be always off for now
+#define WEB_SERVER // toggle web server
+// #define SHOW_FPS // toggle FPS display
 #ifndef VT
 #define GYRO_PIN  // toggle the Inertia Measurement Unit (IMU), i.e. the gyroscope
 #endif
@@ -370,7 +372,7 @@ bool newBoard = false;
 #define T_ACCELERATE '.'
 #define T_DECELERATE ','
 
-#define EXTENSION 'X'
+#define T_EXTENSION 'X'
 #define EXTENSION_GROVE_SERIAL 'S'  // connect to Grove UART2
 #define EXTENSION_VOICE \
   'A'  // connect to Grove UART2 (on V0_*: a slide switch can choose the voice or the Grove), or UART1 (on V1). Hidden
@@ -418,6 +420,18 @@ long loopTimer;
 byte fps = 0;
 // long wdtTimer;
 
+// Gait cycle counting variables
+int targetCycles = 0;       // Target number of gait cycles to complete
+int completedCycles = 0;    // Number of gait cycles completed so far
+bool cycleCountingMode = false;  // Whether cycle counting mode is active
+
+// When true, suppress immediate echo of token 'k' after parameterized gait commands (cycles / time / turning angle).
+// Completion echoes token once when the queued "up" task loads or equivalent completion runs.
+bool deferSkillTokenEcho = false;
+
+// Set only by TaskQueue::loadTaskInfo when a queued step is popped (not tied to newCmdIdx / command source markers).
+bool skillCmdFromTaskQueue = false;
+
 char token;
 char lastToken;
 char lowerToken;
@@ -449,6 +463,7 @@ bool autoLedQ = false;
 bool updateGyroQ = true;
 bool fineAdjustQ = true;
 bool gyroBalanceQ = true;  // true = CONTINUOUSLY access recovery options in dealWithExceptions().
+bool gyroBalanceQlag = true;  // to record the origal gyroBalanceQ value.
 bool printGyroQ = false;  // true = CONTINUOUSLY access print6Axis() which prints Gyro (IMU) data.
 bool readFeedbackQ = false;  // true = CONTINUOUSLY access servoFeedback() which prints servo angles.
 bool followFeedbackQ = false;  // true = CONTINUOUSLY access servoFollow() which follows servo angles as servos are
@@ -495,7 +510,7 @@ int8_t moduleList[] = {
     EXTENSION_QUICK_DEMO,
 };
 
-String moduleNames[] = {"Grove_Serial", "Voice",      "Double_Touch", "Double_Light ", "Double_Ir_Distance ", "Pir",
+String moduleNames[] = {"Grove_Serial", "Voice",      "Double_Touch", "Double_Light ", "Double_IR_Distance ", "PIR",
                         "BackTouch",    "Ultrasonic", "Gesture",      "Camera",        "Quick_Demo"};
 #ifdef NYBBLE
 bool moduleActivatedQ[] = {0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0};
@@ -609,12 +624,7 @@ int balanceSlope[2] = {1, 1};  // roll, pitch
 #include "sound.h"
 #include <Wire.h>
 #include "configConstants.h"
-#ifdef BT_BLE
-#include "bleUart.h"
-#endif
-#ifdef BT_CLIENT
-#include "bleClient.h"
-#endif
+#include "bluetoothManager.h"
 #include "io.h"
 #ifdef GYRO_PIN
 #include "imu.h"
@@ -666,6 +676,7 @@ void initRobot() {
   PT(buzzerVolume);
   PTL("/10");
 #ifdef WEB_SERVER
+#if defined(WIFI_MANAGER)
   if (rebootForWifiManagerQ)
   {
     startWifiManager();
@@ -683,17 +694,19 @@ void initRobot() {
       // );
     }
   }
+#else
+  if (rebootForWifiManagerQ)
+  {
+    connectWifiFromStoredConfig();
+  }
 #endif
+#endif
+
 #ifdef GYRO_PIN
   if (updateGyroQ)
     imuSetup();
 #endif
-#ifdef BT_BLE
-  bleSetup();
-#endif
-#ifdef BT_SSP
-  blueSspSetup();
-#endif
+
   servoSetup();
   lastCmd[0] = '\0';
   newCmd[0] = '\0';
@@ -723,21 +736,30 @@ void initRobot() {
 #endif
 
   QA();
-#ifdef BT_CLIENT
-  bleClientSetup();
-#endif
+  
+  // Bluetooth mode intelligent switching initialization
+  initBluetoothModes();
   tQueue = new TaskQueue();
   loadBySkillName("rest");  // must have to avoid memory crash. need to check why.
                             // allCalibratedPWM(currentAng); alone will lead to crash
   delay(500);
   
-
-
   initModuleManager();
+
 #ifdef GYRO_PIN
   // readIMU(); // ypr is slow when starting up. leave enough time between IMU initialization and this reading
-  if (!moduleDemoQ && updateGyroQ)
+  if (!moduleDemoQ && updateGyroQ){
+    delay(500);
+    // Wait for IMU readings to converge before checking for exceptions
+    if (imuException != 0) {
+      waitForImuConvergence();
+      // Re-read IMU data and check for exceptions after convergence
+      readIMU();
+      getImuException();
+    }
+    print6Axis();
     tQueue->addTask((imuException) ? T_SERVO_CALIBRATE : T_REST, "");
+  }
 #endif
   PTL("Ready!");
   beep(24, 50);

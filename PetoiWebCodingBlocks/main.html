@@ -86,7 +86,11 @@
         <!-- 添加串口通信相关的HTML结构 -->
         <div id="serialContainer">
           <div class="area-header">
-            <span class="area-title" id="serialOutputTitle" data-i18n="serialOutput">Serial Monitor</span>
+            <div class="title-section" style="display: flex; flex-direction: column; flex: 1;">
+              <span class="area-title" id="serialOutputTitle" data-i18n="serialOutput">Serial Monitor</span>
+              <div class="serial-port-info" id="serialPortInfo"
+                style="display: none; font-size: inherit; color: white; margin-top: 4px;"></div>
+            </div>
             <div class="button-group">
               <button onclick="openSerialPort()" class="serial-button" id="openSerialBtn"
                 data-i18n="serialConnect">Connect Serial Port</button>
@@ -141,18 +145,17 @@
       return `[${hours}:${minutes}:${seconds}.${milliseconds}]`;
     }
 
+    // 全局版本日期变量（格式：v年.月.日）
+    const GLOBAL_VERSION_DATE = "v2026.02.03";
+
     // 设置版本日期
     function setVersionDate()
     {
       const versionElement = document.getElementById('versionDate');
       if (versionElement)
       {
-        // 使用当前日期作为版本日期
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        versionElement.textContent = `v${year}.${month}.${day}`;
+        // 使用全局版本日期变量
+        versionElement.textContent = GLOBAL_VERSION_DATE;
       }
     }
 
@@ -263,6 +266,9 @@
           console.log(`Updated Quick Connect button to show IP: ${currentDeviceIP}`);
         }
 
+        // 连接成功时重置WiFi对话框标志
+        hasShownWifiDialog = false;
+
         return true;
       }
 
@@ -283,6 +289,9 @@
         {
           console.log(`Successfully connected with configured IP: ${currentDeviceIP}`);
         }
+
+        // 连接成功时重置WiFi对话框标志
+        hasShownWifiDialog = false;
 
         // 更新Quick Connect按钮状态
         updateQuickConnectButtonState(currentDeviceIP);
@@ -559,6 +568,9 @@
     // 初始化时设置默认语言为英文
     window.addEventListener('DOMContentLoaded', function ()
     {
+      // 清理可能存在的残留对话框
+      cleanupResidualDialogs();
+
       // 确保先动态加载英文语言文件，再进行其他初始化
       loadLanguageFile('en', function ()
       {
@@ -607,6 +619,17 @@
 
         // 加载配置文件
         loadConfig();
+      });
+
+      // 添加页面卸载时的清理
+      window.addEventListener('beforeunload', function ()
+      {
+        cleanupResidualDialogs();
+        // 关闭串口连接
+        if (port)
+        {
+          quickCloseSerialPort();
+        }
       });
 
       // 添加控制台和串口输出区域的键盘复制功能
@@ -1078,7 +1101,36 @@
         return;
       }
 
-      // 获取积木中的IP地址
+      // 检查是否有有效的串口连接
+      const hasValidSerial = writer && port && port.readable && port.writable;
+
+      // 检查WebSocket连接状态（通过window.client和currentDeviceIP判断）
+      const hasValidWebSocket = (typeof window.client !== 'undefined' && window.client && 
+                                 window.client.connected && 
+                                 window.client.ws && 
+                                 window.client.ws.readyState === WebSocket.OPEN) ||
+                                (typeof currentDeviceIP !== 'undefined' && 
+                                 currentDeviceIP && 
+                                 currentDeviceIP !== '192.168.4.1');
+
+      // 如果两种通信方式都可用，优先使用串口通信模式
+      if (hasValidSerial && hasValidWebSocket)
+      {
+        if (showDebug) console.log(getText("bothConnectionsAvailableUsingSerial") || "检测到串口和WebSocket连接，优先使用串口通信模式");
+        executeRunCode();
+        return;
+      }
+
+      // 如果只有串口连接可用，使用串口
+      if (hasValidSerial)
+      {
+        // 如果有串口连接，直接执行程序，让makeConnection积木处理连接逻辑
+        if (showDebug) console.log(getText("detectedSerialConnectionDirectExecute"));
+        executeRunCode();
+        return;
+      }
+
+      // 没有串口连接时，检查WebSocket连接和IP地址
       const makeConnectionBlocks = workspace.getBlocksByType('make_connection');
       let blockIP = '192.168.4.1'; // 默认IP
 
@@ -1095,7 +1147,7 @@
         {
           console.log(getText("detectedInvalidIP").replace('{ip}', blockIP));
         }
-        quickConnect().then(() =>
+        handleWifiConnection(false).then(() =>
         {
           // quick connect完成后，延迟1秒再执行runCode
           setTimeout(() =>
@@ -1104,7 +1156,7 @@
           }, 1000);
         }).catch((error) =>
         {
-          console.error("Quick connect失败:", error);
+          console.error(getText("quickConnectFailed") + ":", error);
           // 即使quick connect失败，也尝试执行runCode
           executeRunCode();
         });
@@ -1148,6 +1200,25 @@
       programStartTime = now; // 记录程序启动时间
       isProgramRunning = true;
       stopExecution = false; // 重置停止标志
+      // 每次运行前清空控制台日志，避免多次运行后 DOM 积压导致手势识别等实时性逐渐下降
+      if (typeof clearConsole === 'function') {
+        clearConsole();
+      }
+      // 重置会话级模式标志，确保本次运行首次调用会发送初始化指令（如 XCr / XCP、XGr / XGP）
+      if (typeof window !== 'undefined') {
+        window.__cameraActivated = false;
+        window.__cameraPolled = false;
+        window.__cameraQueryActive = false;
+        window.__lastCameraFrameKey = '';
+        window.__gestureActivated = false;
+        window.__gesturePolled = false;
+        window.__lastGestureFrameKey = '';
+        // 重置手势轮询相关状态，避免再次运行时节流/缓存沿用上次运行导致实时性下降
+        window.__lastGesturePollTs = 0;
+        window.__lastGestureValue = undefined;
+        window.__gesturePollInFlight = false;
+      }
+      if (showDebug) console.log(getText("programStartedStopExecutionFalse"));
 
       // 显示停止按钮，隐藏运行按钮，并设置停止按钮为红色背景
       const stopBtn = document.getElementById('stopCodeBtn');
@@ -1156,7 +1227,17 @@
       stopBtn.style.color = 'white';
       document.querySelector('button[onclick="runCode()"]').style.display = 'none';
 
-      console.log(getText("programExecutionStarted"));
+      if (showDebug) console.log(getText("programExecutionStarted"));
+
+      // 检查是否有有效的串口连接
+      const hasValidSerial = writer && port && port.readable && port.writable;
+      if (hasValidSerial)
+      {
+        if (showDebug) console.log(getText("usingSerialConnectionExecute"));
+      } else
+      {
+        if (showDebug) console.log(getText("usingWebSocketConnectionExecute"));
+      }
 
       window.LoopTrap = 1000;
       Blockly.JavaScript.INFINITE_LOOP_TRAP =
@@ -1184,90 +1265,627 @@
       // 替换所有 console.log 为 asyncLog
       code = code.replace(/console\.log\((.*?)\);/g, 'await asyncLog($1);');
 
-      // 包装整个代码到一个异步函数中
-      const runCodeBlock = `
-function asyncLog(message) {
-  return new Promise((resolve) => {
-    console.log(message);
-    setTimeout(resolve, 0);
+      // 根据连接类型生成不同的代码
+      let connectionFunctions = '';
+      let restCommand = '';
+      let closeConnectionCall = '';
+
+      if (hasValidSerial)
+      {
+        // 使用串口连接的函数
+        connectionFunctions = `
+// 串口通信函数，支持自动切换到WiFi
+async function serialRequest(command, timeout = 5000, isRest = false, expectedResponse = null, bypassStopCheck = false) {
+  if (!bypassStopCheck) {
+    checkStopExecution();
+  }
+  
+  // 检查串口连接是否仍然有效
+  if (!writer || !port || !port.readable || !port.writable) {
+    console.warn(getText("serialDisconnectedTryWiFi"));
+    
+    // 如果有保存的IP地址，尝试使用WiFi连接
+    if (currentDeviceIP && currentDeviceIP !== '192.168.4.1') {
+      try {
+        if (showDebug) console.log(getText("tryingWiFiConnection") + ": " + currentDeviceIP);
+        
+        // 创建WebSocket连接
+        if (window.petoiClient) {
+          await window.petoiClient.disconnect();
+        }
+        
+        window.petoiClient = new PetoiAsyncClient("ws://" + currentDeviceIP + ":81");
+        await window.petoiClient.connect();
+        
+        // 处理命令格式
+        let wifiCommand = command;
+        if (command.startsWith("bytes:")) {
+          // 对于WiFi连接，字节数组需要转换为base64格式
+          const byteArrayStr = command.substring(6);
+          const byteArray = JSON.parse(byteArrayStr);
+          const uint8Array = new Uint8Array(byteArray);
+          const dataText = String.fromCharCode.apply(null, uint8Array);
+          wifiCommand = "b64:" + btoa(dataText);
+        }
+        
+        // 在发送命令前记录到Console Log
+        if (showSentCommands && typeof logSentCommand === 'function') {
+          logSentCommand(wifiCommand);
+        }
+        
+        // 使用WiFi发送命令
+        const result = await window.petoiClient.sendCommand(wifiCommand, timeout, expectedResponse);
+        
+        // 在收到响应后记录到Console Log
+        if (showSentCommands && typeof logCommandResponse === 'function') {
+          logCommandResponse(result);
+        }
+        
+        return result;
+      } catch (wifiError) {
+        console.error(getText("wiFiConnectionFailed") + ":", wifiError);
+        throw new Error(getText("serialAndWiFiBothUnavailable"));
+      }
+    } else {
+      throw new Error(getText("serialUnavailableNoValidIP"));
+    }
+  }
+  
+  try {
+    // 检查是否为字节数组格式的命令
+    let dataToSend;
+    let displayCommand = command;
+    let isReadCommand = false;
+    
+    if (command.startsWith("bytes:")) {
+      // 解析字节数组
+      const byteArrayStr = command.substring(6); // 去掉"bytes:"前缀
+      const byteArray = JSON.parse(byteArrayStr);
+      dataToSend = new Uint8Array(byteArray);
+      
+      // 检查是否为读取命令（以R开头）
+      if (byteArray.length > 0 && byteArray[0] === 82) { // R的ASCII码是82
+        isReadCommand = true;
+      }
+      
+      // 生成显示用的命令字符串
+      displayCommand = "字节数组: [" + byteArray.map(b => {
+        if (b >= 32 && b <= 126) {
+          return String.fromCharCode(b);
+        } else {
+          return "\\\\" + b;
+        }
+      }).join(",") + "]";
+    } else {
+      // 普通字符串命令
+      dataToSend = new TextEncoder().encode(command);
+      // 检查是否为读取命令
+      if (command.toLowerCase().startsWith('r')) {
+        isReadCommand = true;
+      }
+    }
+    
+    // 在发送命令前记录到Console Log
+    if (showSentCommands && typeof logSentCommand === 'function') {
+      logSentCommand(command);
+    }
+    
+    // 发送命令
+    await writer.write(dataToSend);
+    
+    // 检查是否为查询关节角度命令
+    if (command === 'j') {
+      // 等待关节角度数据返回（格式：索引行\t角度行\tj）
+      if (typeof showDebug !== 'undefined' && showDebug) {
+        console.log(getText('debugDetectedJCommand'));
+      }
+      try {
+        const result = await waitForJointAnglesResponse(timeout);
+        if (typeof showDebug !== 'undefined' && showDebug) {
+          console.log(getText('debugJointAnglesResponseComplete'), result ? getText('debugJointAnglesResponseSuccess') : getText('debugJointAnglesResponseFailed'));
+        }
+        // 在收到响应后记录到Console Log
+        if (showSentCommands && typeof logCommandResponse === 'function') {
+          logCommandResponse(result || 'j command completed');
+        }
+        return result;
+      } catch (error) {
+        console.error(getText('debugWaitJointAnglesError'), error);
+        throw error;
+      }
+    }
+    
+    // 如果是读取命令，等待并解析响应
+    if (isReadCommand) {
+      const result = await waitForSerialResponse('R', timeout);
+      // 在收到响应后记录到Console Log
+      if (showSentCommands && typeof logCommandResponse === 'function') {
+        logCommandResponse(result || 'Read command completed');
+      }
+      return result;
+    } else {
+      // 对于普通命令，等待并捕获串口响应（直到收到token）
+      const response = await waitForGeneralSerialResponse(command, 1000);
+      // 记录实际的串口响应
+      if (showSentCommands && typeof logCommandResponse === 'function') {
+        if (response) {
+          logCommandResponse(response);
+        } else {
+          logCommandResponse('[No response or timeout]');
+        }
+      }
+      return response || "Command sent via serial";
+    }
+  } catch (error) {
+    console.error(getText("serialSendError") + ":", error);
+    
+    // 串口发送失败，尝试使用WiFi
+    if (currentDeviceIP && currentDeviceIP !== '192.168.4.1') {
+      try {
+        if (showDebug) console.log(getText("serialSendFailedTryWiFi") + ": " + currentDeviceIP);
+        
+        if (window.petoiClient) {
+          await window.petoiClient.disconnect();
+        }
+        
+        window.petoiClient = new PetoiAsyncClient("ws://" + currentDeviceIP + ":81");
+        await window.petoiClient.connect();
+        
+        // 处理命令格式
+        let wifiCommand = command;
+        if (command.startsWith("bytes:")) {
+          // 对于WiFi连接，字节数组需要转换为base64格式
+          const byteArrayStr = command.substring(6);
+          const byteArray = JSON.parse(byteArrayStr);
+          const uint8Array = new Uint8Array(byteArray);
+          const dataText = String.fromCharCode.apply(null, uint8Array);
+          wifiCommand = "b64:" + btoa(dataText);
+        }
+        
+        // 在发送命令前记录到Console Log
+        if (showSentCommands && typeof logSentCommand === 'function') {
+          logSentCommand(wifiCommand);
+        }
+        
+        const result = await window.petoiClient.sendCommand(wifiCommand, timeout, expectedResponse);
+        
+        // 在收到响应后记录到Console Log
+        if (showSentCommands && typeof logCommandResponse === 'function') {
+          logCommandResponse(result);
+        }
+        
+        return result;
+      } catch (wifiError) {
+        console.error(getText("wiFiConnectionAlsoFailed") + ":", wifiError);
+      }
+    }
+    
+    throw error;
+  }
+}
+
+// 串口连接函数（处理IP获取）
+async function makeConnection(ip) {
+  if (showDebug) console.log(getText("serialConnectedSkipWebSocket"));
+  
+  // 如果需要获取IP地址，通过串口获取
+  if (!currentDeviceIP || currentDeviceIP === '192.168.4.1') {
+    if (showDebug) console.log(getText("getIPAddressViaSerial"));
+    try {
+      await sendWifiCommand();
+    } catch (error) {
+      console.warn(getText("getIPAddressViaSerialFailed") + ":", error);
+    }
+  } else {
+    if (showDebug) console.log(getText("usingExistingIPAddress") + ":", currentDeviceIP);
+  }
+  
+  return true;
+}
+
+// 关闭连接函数（保持串口连接）
+async function closeConnection() {
+  if (showDebug) console.log(getText("keepSerialConnection"));
+  return true;
+}
+
+// 全局响应等待队列
+let pendingResponses = [];
+
+// 等待串口响应的函数 - 重新实现，按照用户建议
+async function waitForSerialResponse(expectedToken = 'R', timeout = 3000) {
+  return new Promise((resolve, reject) => {
+    let accumulatedData = '';
+    let startTime = Date.now();
+    
+    const checkData = () => {
+      // 检查是否超时
+      if (Date.now() - startTime > timeout) {
+        console.warn(getText('serialResponseTimeout'));
+        resolve(null);
+        return;
+      }
+      
+      // 获取最新的串口缓冲区数据
+      if (typeof serialBuffer !== 'undefined' && serialBuffer.length > 0) {
+        accumulatedData += serialBuffer;
+        // 不要立即清空缓冲区，等找到完整响应后再清空
+      }
+      
+      // 按行分割数据
+      const lines = accumulatedData.split(/\\r?\\n/);
+      
+      // 查找结束token（如 'R'）
+      let foundEndToken = false;
+      let tokenIndex = -1;
+      
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === expectedToken) {
+          foundEndToken = true;
+          tokenIndex = i;
+          break;
+        }
+      }
+      
+      if (foundEndToken) {
+        // 找到结束token，解析数据
+        const dataToProcess = lines.slice(0, tokenIndex + 1);
+        
+        // 清空已处理的数据部分
+        const processedText = dataToProcess.join('\\r\\n') + '\\r\\n';
+        if (typeof serialBuffer !== 'undefined') {
+          if (serialBuffer.includes(processedText)) {
+            serialBuffer = serialBuffer.replace(processedText, '');
+          } else {
+            // 如果精确匹配失败，清空整个缓冲区
+            serialBuffer = '';
+          }
+        }
+        
+        // 查找等号后的数字
+        for (const line of dataToProcess) {
+          const trimmedLine = line.trim();
+          if (trimmedLine === '=') {
+            // 下一行查找数字
+            const nextLineIndex = dataToProcess.indexOf(line) + 1;
+            if (nextLineIndex < dataToProcess.length) {
+              const nextLine = dataToProcess[nextLineIndex].trim();
+              if (/^\\d+$/.test(nextLine)) {
+                const value = parseInt(nextLine, 10);
+                resolve(value);
+                return;
+              }
+            }
+          }
+          
+          // 也检查 =数字 的格式
+          const match = trimmedLine.match(/^=(\\d+)$/);
+          if (match) {
+            const value = parseInt(match[1], 10);
+            resolve(value);
+            return;
+          }
+        }
+        
+        console.warn(getText('noNumericDataFound'));
+        resolve(null);
+      } else {
+        // 继续等待数据
+        setTimeout(checkData, 50);
+      }
+    };
+    
+    // 开始检查
+    setTimeout(checkData, 50);
   });
 }
 
-// 检查停止标志的函数
-function checkStopExecution() {
-  if (stopExecution) {
-    throw new Error("程序执行被用户停止");
+// 等待关节角度响应的函数
+// 支持两种格式:
+// 新格式: "=\\n0 1 2 3...\\n-1, -1, 0, 0,...\\nj\\n"
+// 旧格式: "0\\t1\\t2\\t...\\n0,\\t0,\\t0,\\t...\\nj\\n"
+async function waitForJointAnglesResponse(timeout = 5000) {
+  if (typeof showDebug !== 'undefined' && showDebug) {
+    console.log(getText('debugWaitJointAnglesStart'), timeout);
   }
-}
-
-// 改进的循环停止检查函数
-function checkStopExecutionInLoop() {
-  if (stopExecution) {
-    throw new Error("程序执行被用户停止");
-  }
-  // 给其他任务执行的机会，包括停止检查
-  return new Promise(resolve => setTimeout(resolve, 0));
-}
-
-(async function () {
-  try {
-    checkStopExecution();
+  return new Promise((resolve, reject) => {
+    let startTime = Date.now();
+    let lastBufferLength = 0;
     
-${code}
-
-    checkStopExecution();
-    // 程序结束时自动发送休息指令'd'
-    await asyncLog(getText("programEndingRestCommand"));
-    await webRequest("d", 5000, true);
-  } catch (e) {
-    if (e.message === "程序执行被用户停止") {
-      // 只在catch块中打印一次停止消息，避免重复
-      await asyncLog(getText("programExecutionStopped"));
-      // 程序被用户停止时，立即发送休息指令'd'（在关闭连接之前）
-      try {
-        await asyncLog(getText("programEndingRestCommand"));
-        await webRequest("d", 5000, true, null, true); // 绕过停止标志检查
-        console.log("Rest command sent successfully");
-      } catch (restError) {
-        console.error(getText("restCommandFailed") + restError.message);
+    const checkData = () => {
+      // 检查是否超时
+      if (Date.now() - startTime > timeout) {
+        console.warn(getText('debugWaitJointAnglesTimeout'));
+        resolve(null);
+        return;
       }
-    } else {
-      console.error(getText("restCommandFailed") + e.message);
+      
+      // 直接从serialBuffer读取最新数据（不累加）
+      let currentData = '';
+      if (typeof serialBuffer !== 'undefined' && serialBuffer.length > 0) {
+        currentData = serialBuffer;
+      }
+      
+      // 按行分割数据
+      const lines = currentData.split(/\\r?\\n/);
+      
+      // 查找结束标记 'j'
+      let foundEndToken = false;
+      let tokenIndex = -1;
+      
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === 'j') {
+          foundEndToken = true;
+          tokenIndex = i;
+          break;
+        }
+      }
+      
+      if (foundEndToken && tokenIndex >= 2) {
+        if (typeof showDebug !== 'undefined' && showDebug) {
+          console.log(getText('debugWaitJointAnglesFoundToken'), tokenIndex);
+          console.log(getText('debugWaitJointAnglesRelatedLines'), lines.slice(Math.max(0, tokenIndex - 3), tokenIndex + 1));
+        }
+        
+        let fullResponse = '';
+        let dataToProcess = [];
+        
+        // 检查是否为新格式 (前面有 '=' 标记)
+        if (tokenIndex >= 3 && lines[tokenIndex - 3].trim() === '=') {
+          if (typeof showDebug !== 'undefined' && showDebug) {
+            console.log(getText('debugRecognizedNewFormat'));
+          }
+          // 新格式: = \\n 索引行 \\n 角度行 \\n j
+          const equalLine = lines[tokenIndex - 3];
+          const indexLine = lines[tokenIndex - 2];
+          const angleLine = lines[tokenIndex - 1];
+          const endToken = lines[tokenIndex];
+          
+          fullResponse = equalLine + "\\n" + indexLine + "\\n" + angleLine + "\\n" + endToken + "\\n";
+          dataToProcess = lines.slice(0, tokenIndex + 1);
+          if (typeof showDebug !== 'undefined' && showDebug) {
+            console.log(getText('debugNewFormatResponseLength'), fullResponse.length);
+          }
+        } else {
+          if (typeof showDebug !== 'undefined' && showDebug) {
+            console.log(getText('debugRecognizedOldFormat'));
+          }
+          // 旧格式或其他格式: 索引行 \\n 角度行 \\n j
+          const indexLine = lines[tokenIndex - 2];
+          const angleLine = lines[tokenIndex - 1];
+          const endToken = lines[tokenIndex];
+          
+          fullResponse = indexLine + "\\n" + angleLine + "\\n" + endToken + "\\n";
+          dataToProcess = lines.slice(0, tokenIndex + 1);
+          if (typeof showDebug !== 'undefined' && showDebug) {
+            console.log(getText('debugOldFormatResponseLength'), fullResponse.length);
+          }
+        }
+        
+        // 清空已处理的数据部分
+        if (typeof serialBuffer !== 'undefined') {
+          // 找到 'j' 标记在原始缓冲区中的位置
+          const jMarkerIndex = serialBuffer.lastIndexOf('j\\n');
+          if (jMarkerIndex >= 0) {
+            // 从 j 标记后开始保留
+            serialBuffer = serialBuffer.substring(jMarkerIndex + 2);
+            if (typeof showDebug !== 'undefined' && showDebug) {
+              console.log(getText('debugClearBufferKeepAfterJ'), serialBuffer.length);
+            }
+          } else {
+            // 回退方案：查找单独的 j
+            const jIndex = serialBuffer.lastIndexOf('j');
+            if (jIndex >= 0) {
+              serialBuffer = serialBuffer.substring(jIndex + 1);
+              if (typeof showDebug !== 'undefined' && showDebug) {
+                console.log(getText('debugClearBufferBackupPlan'), serialBuffer.length);
+              }
+            } else {
+              // 如果都找不到，清空整个缓冲区
+              serialBuffer = '';
+              if (typeof showDebug !== 'undefined' && showDebug) {
+                console.log(getText('debugClearEntireBuffer'));
+              }
+            }
+          }
+        }
+        
+        resolve(fullResponse);
+        return;
+      } else {
+        // 继续等待数据
+        setTimeout(checkData, 50);
+      }
+    };
+    
+    // 开始检查
+    setTimeout(checkData, 50);
+  });
+}
+
+// 等待普通命令的串口响应
+// 捕获发送命令后串口返回的任何内容，直到收到命令的token字符
+async function waitForGeneralSerialResponse(command, timeout = 1000) {
+  return new Promise((resolve) => {
+    let startTime = Date.now();
+    let initialBufferLength = (typeof serialBuffer !== 'undefined') ? serialBuffer.length : 0;
+    
+    // 提取命令的 token（第一个字符）
+    const commandToken = command ? command.charAt(0).toLowerCase() : '';
+    
+    const checkData = () => {
+      // 检查是否超时
+      if (Date.now() - startTime > timeout) {
+        // 超时后返回已捕获的内容（如果有的话）
+        const captured = (typeof serialBuffer !== 'undefined' && serialBuffer.length > initialBufferLength) 
+          ? serialBuffer.substring(initialBufferLength).trim() 
+          : null;
+        resolve(captured);
+        return;
+      }
+      
+      // 检查是否有新数据
+      if (typeof serialBuffer !== 'undefined' && serialBuffer.length > initialBufferLength) {
+        // 获取新增的数据
+        const newData = serialBuffer.substring(initialBufferLength);
+        
+        // 按行分割，过滤空行
+        const lines = newData.split(/\\r?\\n/).map(l => l.trim()).filter(l => l.length > 0);
+        
+        if (lines.length === 0) {
+          // 还没有收到任何数据行，继续等待
+          setTimeout(checkData, 50);
+          return;
+        }
+        
+        // 检查最后一行是否是 token 字符
+        const lastLine = lines[lines.length - 1];
+        
+        // 如果最后一行正好是命令的 token，说明响应完整
+        if (lastLine === commandToken) {
+          // 返回完整响应（包括 token）
+          resolve(newData.trim());
+          return;
+        }
+        
+        // 如果最后一行是单字符且是已知的完成标记，也认为响应完成
+        // 这是为了兼容一些可能不严格遵循 token 规则的情况
+        if (lastLine.length === 1 && /[kdmjigbwxlr]/i.test(lastLine)) {
+          resolve(newData.trim());
+          return;
+        }
+      }
+      
+      // 继续等待
+      setTimeout(checkData, 50);
+    };
+    
+    // 稍微延迟后开始检查（给设备一点反应时间）
+    setTimeout(checkData, 50);
+  });
+}`;
+
+        restCommand = 'await serialRequest("d", 5000, true);';
+        closeConnectionCall = 'await closeConnection();';
+
+        // 设置串口模式标志，并重定向webRequest到serialRequest
+        connectionFunctions += `
+// 串口模式标志
+window.__isSerialMode = true;
+
+// 在串口模式下，将webRequest重定向到serialRequest
+// 这样generators.js中的encodeMoveCommand函数也能正常工作
+window.webRequest = serialRequest;
+`;
+
+        // 将生成代码中的webRequest替换为serialRequest
+        code = code.replace(/webRequest\(/g, 'serialRequest(');
+      } else
+      {
+        // 使用WebSocket连接的函数（原有逻辑）
+        connectionFunctions = `
+// WebSocket通信函数
+async function webRequest(command, timeout = 5000, isRest = false, expectedResponse = null, bypassStopCheck = false) {
+  if (!bypassStopCheck) {
+    checkStopExecution();
+  }
+  
+  if (!window.petoiClient) {
+    throw new Error(getText("webSocketConnectionUnavailable"));
+  }
+  
+  try {
+    // 处理字节数组命令格式
+    let finalCommand = command;
+    if (command.startsWith("bytes:")) {
+      // 对于WebSocket连接，字节数组需要转换为base64格式
+      const byteArrayStr = command.substring(6);
+      const byteArray = JSON.parse(byteArrayStr);
+      const uint8Array = new Uint8Array(byteArray);
+      const dataText = String.fromCharCode.apply(null, uint8Array);
+      finalCommand = "b64:" + btoa(dataText);
     }
+    
+    // 在发送命令前记录到Console Log（异步执行，避免 DOM 操作阻塞命令发送）
+    if (showSentCommands && typeof logSentCommand === 'function') {
+      setTimeout(() => { try { logSentCommand(finalCommand); } catch (e) {} }, 0);
+    }
+    
+    let result = await window.petoiClient.sendCommand(finalCommand, timeout, expectedResponse);
+    
+    // 对于扩展命令（X开头的命令，如 XGp~、XGr~、Xg~），
+    // 固件会先输出具体响应，然后输出 'X' token 确认命令完成
+    // 在 Web 模式下，我们需要过滤掉这个额外的 'X' token，避免污染响应结果
+    const isExtensionCommand = (command && typeof command === 'string' && command.trim().toUpperCase().startsWith('X'));
+    if (isExtensionCommand && Array.isArray(result) && result.length > 1) {
+      // 过滤掉单独的 'X' token（保留其他响应）
+      result = result.filter(item => {
+        const itemStr = String(item).trim();
+        return itemStr !== 'X' && itemStr !== 'x';
+      });
+    }
+    
+    // 与 communication.js 一致：单元素数组展开为标量，便于传感器积木（如手势值）解析
+    if (Array.isArray(result) && result.length === 1) {
+      result = result[0];
+    }
+    
+    // 在收到响应后记录到Console Log（异步执行，避免 DOM 操作阻塞 return，影响手势轮询实时性）
+    // XGp 无手势(-1) 时不记录，避免大量 -1 轮询刷屏导致 DOM 积压、后续手势识别变慢
+    if (showSentCommands && typeof logCommandResponse === 'function') {
+      const isXGpNoGesture = (command === 'XGp' || finalCommand === 'XGp' || command === 'XGp~' || finalCommand === 'XGp~') && (
+        result === -1 || result === '-1' ||
+        (typeof result === 'string' && (result.trim() === '-1' || (result.match(/-?\\d+/) && parseInt(result.match(/-?\\d+/)[0], 10) === -1)))
+      );
+      if (!isXGpNoGesture) {
+        setTimeout(() => { try { logCommandResponse(result); } catch (e) {} }, 0);
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(getText("webSocketSendError") + ":", error);
+    throw error;
   }
-  await closeConnection();
-  console.log(getText("taskEnded"));
-})().catch((e) => {
-  if (e.message === "程序执行被用户停止") {
-    // 停止消息已在try-catch中处理，这里不需要重复打印
-    // console.log(getText("programExecutionStopped"));
-  } else {
-    console.error(getText("networkRequestError") + ": " + e.message);
-    alert(getText("networkRequestError") + ": " + e.message);
-  }
-}).finally(() => {
-  // 程序执行完成后，重置运行状态
-  isProgramRunning = false;
-  stopExecution = false;
-  
-  // 记录程序结束时间，用于防抖
-  lastRunCodeTime = Date.now();
-  
-  // 隐藏停止按钮，显示运行按钮，并重置停止按钮样式
-  const stopBtn = document.getElementById('stopCodeBtn');
-  stopBtn.style.display = 'none';
-  stopBtn.style.backgroundColor = '';
-  stopBtn.style.color = '';
-  document.querySelector('button[onclick="runCode()"]').style.display = 'inline-block';
-  
-  // 清理控制台输入界面
-  if (typeof clearConsoleInput === 'function') {
-    clearConsoleInput();
+}
+
+// WebSocket连接函数
+async function makeConnection(ip) {
+  if (window.petoiClient) {
+    await window.petoiClient.disconnect();
   }
   
-  console.log(getText("programExecutionCompleted"));
-});
-`
+  window.petoiClient = new PetoiAsyncClient("ws://" + ip + ":81");
+  await window.petoiClient.connect();
+  if (showDebug) console.log(getText("webSocketConnected") + ": " + ip);
+  return true;
+}
+
+// 关闭WebSocket连接函数
+async function closeConnection() {
+  if (window.petoiClient) {
+    await window.petoiClient.disconnect();
+    window.petoiClient = null;
+    if (showDebug) console.log(getText("webSocketClosed"));
+  }
+  return true;
+}`;
+        restCommand = 'await webRequest("d", 5000, true);';
+        closeConnectionCall = 'await closeConnection();';
+      }
+
+      // 用字符串拼接构建 runCodeBlock，避免在 file:// 下因模板字符串内含 ${code} 导致解析截断（Invalid or unexpected token）
+      code = (code == null) ? '' : String(code);
+      // 防止用户代码或 connectionFunctions 中含“结束 script 标签”导致 HTML 解析器提前关闭 script 或 eval 报错（本注释避免写该标签字面量）
+      function escapeScriptTag(s) { return (s == null ? '' : String(s)).replace(new RegExp('<' + '/script>', 'gi'), '\\u003c/script>'); }
+      code = escapeScriptTag(code);
+      connectionFunctions = escapeScriptTag(connectionFunctions);
+      const runCodePrefix = "function asyncLog(message) {\n  return new Promise((resolve) => {\n    console.log(message);\n    setTimeout(resolve, 0);\n  });\n}\n\nfunction checkStopExecution() {\n  if (stopExecution) {\n    throw new Error(getText(\"programExecutionStoppedByUser\"));\n  }\n}\n\nfunction checkStopExecutionInLoop() {\n  if (stopExecution) {\n    throw new Error(getText(\"programExecutionStoppedByUser\"));\n  }\n  return new Promise(resolve => setTimeout(resolve, 0));\n}\n\n" + connectionFunctions + "\n\n(async function () {\n  try {\n    checkStopExecution();\n\n";
+      const runCodeSuffix = "\n    checkStopExecution();\n    // 等待最后一个动作的冷却时间结束\n    if (typeof window !== 'undefined' && window.__motionBusyUntil) {\n      const __now = Date.now();\n      const __remainingCooldown = window.__motionBusyUntil - __now;\n      if (__remainingCooldown > 0) {\n        if (showDebug) console.log('Waiting for final action cooldown: ' + __remainingCooldown + 'ms');\n        await new Promise(resolve => setTimeout(resolve, __remainingCooldown));\n      }\n    }\n    await asyncLog(getText(\"programEndingRestCommand\"));\n    " + restCommand + "\n  } catch (e) {\n    if (e.message === \"\u7a0b\u5e8f\u6267\u884c\u88ab\u7528\u6237\u505c\u6b62\") {\n      await asyncLog(getText(\"programExecutionStopped\"));\n      try {\n        await asyncLog(getText(\"programEndingRestCommand\"));\n        " + (hasValidSerial ? 'await serialRequest("d", 5000, true, null, true);' : 'await webRequest("d", 5000, true, null, true);') + "\n        if (showDebug) console.log(\"Rest command sent successfully\");\n      } catch (restError) {\n        console.error(getText(\"restCommandFailed\") + restError.message);\n      }\n    } else {\n      console.error(getText(\"programExecutionError\") + \":\", e.message);\n      console.error(getText(\"restCommandFailed\") + e.message);\n    }\n  }\n  " + closeConnectionCall + "\n  console.log(getText(\"taskEnded\"));\n})().catch((e) => {\n  if (e.message !== \"\u7a0b\u5e8f\u6267\u884c\u88ab\u7528\u6237\u505c\u6b62\") {\n    console.error(getText(\"networkRequestError\") + \": \" + e.message);\n    alert(getText(\"networkRequestError\") + \": \" + e.message);\n  }\n}).finally(() => {\n  if (showDebug) console.log(getText(\"programExecutionCompletedResetState\"));\n  isProgramRunning = false;\n  stopExecution = false;\n  var stopBtn = document.getElementById('stopCodeBtn');\n  if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.style.backgroundColor = ''; stopBtn.style.color = ''; }\n  var runBtn = document.querySelector('button[onclick=\"runCode()\"]');\n  if (runBtn) runBtn.style.display = 'inline-block';\n  if (typeof clearConsoleInput === 'function') clearConsoleInput();\n  if (showDebug) console.log(getText(\"programExecutionCompleted\"));\n});\n";
+      // 对完整拼接结果再转义一次，防止“script 结束标签”字面量混入导致 eval 或解析异常
+      let runCodeBlock = escapeScriptTag(runCodePrefix + code + runCodeSuffix);
+      // 将智能引号等易导致 Invalid or unexpected token 的字符规范为 ASCII
+      runCodeBlock = runCodeBlock.replace(/\u201c/g, '"').replace(/\u201d/g, '"').replace(/\u2018/g, "'").replace(/\u2019/g, "'");
       try
       {
         eval(runCodeBlock);
@@ -1275,8 +1893,21 @@ ${code}
       {
         console.info("code:");
         console.info(runCodeBlock);
-        console.error(getText("networkRequestError") + ": " + e.message);
-        alert(getText("networkRequestError") + ": " + e.message);
+        // 一点运行就报错多为 eval 语法错误（如 Unexpected/Invalid token），与网络无关
+        const isSyntaxError = e instanceof SyntaxError || (e.message && (e.message.indexOf("Unexpected token") !== -1 || e.message.indexOf("Unexpected end") !== -1 || e.message.indexOf("Invalid or unexpected token") !== -1));
+        const errMsg = isSyntaxError
+          ? (getText("generatedCodeSyntaxError") || "Generated code syntax error") + ": " + e.message
+          : getText("networkRequestError") + ": " + e.message;
+        console.error(errMsg);
+        if (e.lineNumber != null || e.columnNumber != null) {
+          console.error("Position: line " + (e.lineNumber || "?") + ", column " + (e.columnNumber || "?"));
+        }
+        var errOffset = (e.columnNumber != null && e.columnNumber > 0) ? e.columnNumber - 1 : runCodeBlock.indexOf("<");
+        if (errOffset >= 0) {
+          var snippet = runCodeBlock.substring(Math.max(0, errOffset - 50), Math.min(runCodeBlock.length, errOffset + 50));
+          console.error("Snippet around error position: ..." + snippet + "...");
+        }
+        alert(errMsg + (isSyntaxError ? "\n\n" + (getText("checkBlocksForSpecialChars") || "Check blocks for special characters (e.g. < or quotes).") : ""));
         // 发生错误时也要重置运行状态和按钮样式
         isProgramRunning = false;
         const stopBtn = document.getElementById('stopCodeBtn');
@@ -1547,7 +2178,7 @@ ${code}
       const tokenLine = lines.find(line => line.startsWith('# Token'));
       if (!tokenLine)
       {
-        throw new Error('未找到Token');
+        throw new Error(getText('tokenNotFound'));
       }
       const token = lines[lines.indexOf(tokenLine) + 1].trim();
 
@@ -1555,7 +2186,7 @@ ${code}
       const dataStartIndex = lines.findIndex(line => line.startsWith('# Data'));
       if (dataStartIndex === -1)
       {
-        throw new Error('未找到Data');
+        throw new Error(getText('dataNotFound'));
       }
 
       // 解析data数组
@@ -1825,9 +2456,200 @@ ${code}
       void logDiv.offsetHeight;
     }
 
+    // 使用指定时间戳写入控制台（与串口监视器时间对齐）
+    function addConsoleMessageAt(args, timestampStr)
+    {
+      const logDiv = document.getElementById('consoleLog');
+      const showTimestamp = document.getElementById('showTimestampBtn').classList.contains('active');
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'console-item';
+
+      const messages = Array.from(args).map(arg => typeof arg === 'object' ? (()=>{ try { return JSON.stringify(arg, null, 2); } catch { return String(arg); } })() : String(arg));
+      const messageText = messages.join(' ');
+
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'timestamp';
+      timestampSpan.textContent = `${timestampStr} `;
+      timestampSpan.style.display = showTimestamp ? 'inline' : 'none';
+
+      const messageSpan = document.createElement('span');
+      messageSpan.className = 'message-content';
+      messageSpan.textContent = `${messageText} `;
+
+      messageDiv.appendChild(timestampSpan);
+      messageDiv.appendChild(messageSpan);
+      logDiv.appendChild(messageDiv);
+
+      while (logDiv.children.length > 500)
+      {
+        logDiv.removeChild(logDiv.firstChild);
+      }
+
+      logDiv.scrollTop = logDiv.scrollHeight;
+      void logDiv.offsetHeight;
+    }
+
+    // 在Console Log中显示发送的命令（类似Serial Monitor）
+    function logSentCommand(command)
+    {
+      if (!showSentCommands) {
+        return;
+      }
+
+      const logDiv = document.getElementById('consoleLog');
+      const showTimestamp = document.getElementById('showTimestampBtn').classList.contains('active');
+      const timestampStr = getFormattedTimestamp();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'console-item';
+
+      // 解码命令以显示可读格式
+      let displayCommand = command;
+      if (command.startsWith("b64:")) {
+        try {
+          const decoded = atob(command.substring(4));
+          // 提取命令的第一个字符作为token
+          if (decoded.length > 0) {
+            displayCommand = decoded.charAt(0);
+            // 如果有参数，也显示出来
+            if (decoded.length > 1) {
+              const params = [];
+              for (let i = 1; i < decoded.length; i++) {
+                const code = decoded.charCodeAt(i);
+                if (code !== 126) { // 忽略结束符 '~'
+                  params.push(code);
+                }
+              }
+              if (params.length > 0) {
+                displayCommand += ' ' + params.join(' ');
+              }
+            }
+          }
+        } catch (error) {
+          displayCommand = command; // 解码失败时保持原样
+        }
+      } else if (command.startsWith("bytes:")) {
+        try {
+          const byteArrayStr = command.substring(6);
+          const byteArray = JSON.parse(byteArrayStr);
+          if (byteArray.length > 0) {
+            const token = String.fromCharCode(byteArray[0]);
+            displayCommand = token;
+            if (byteArray.length > 1) {
+              const params = [];
+              for (let i = 1; i < byteArray.length; i++) {
+                if (byteArray[i] !== 126) { // 忽略结束符 '~'
+                  params.push(byteArray[i]);
+                }
+              }
+              if (params.length > 0) {
+                displayCommand += ' ' + params.join(' ');
+              }
+            }
+          }
+        } catch (error) {
+          displayCommand = command; // 解析失败时保持原样
+        }
+      }
+
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'timestamp';
+      timestampSpan.textContent = `${timestampStr} `;
+      timestampSpan.style.display = showTimestamp ? 'inline' : 'none';
+      timestampSpan.style.color = '#888';
+
+      const messageSpan = document.createElement('span');
+      messageSpan.className = 'message-content';
+      messageSpan.textContent = displayCommand;
+      messageSpan.style.color = '#4CAF50'; // 使用绿色显示发送的命令
+
+      messageDiv.appendChild(timestampSpan);
+      messageDiv.appendChild(messageSpan);
+      logDiv.appendChild(messageDiv);
+
+      while (logDiv.children.length > 500)
+      {
+        logDiv.removeChild(logDiv.firstChild);
+      }
+
+      logDiv.scrollTop = logDiv.scrollHeight;
+      void logDiv.offsetHeight;
+    }
+
+    // 在Console Log中显示命令响应（类似Serial Monitor）
+    function logCommandResponse(response)
+    {
+      if (!showSentCommands) {
+        return;
+      }
+
+      const logDiv = document.getElementById('consoleLog');
+      const showTimestamp = document.getElementById('showTimestampBtn').classList.contains('active');
+      const timestampStr = getFormattedTimestamp();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'console-item';
+
+      // 处理响应数据
+      let displayResponse = '';
+      if (Array.isArray(response)) {
+        // 如果是数组，取第一个元素
+        displayResponse = response.length > 0 ? String(response[0]) : '';
+      } else if (response !== null && response !== undefined) {
+        displayResponse = String(response);
+      }
+
+      // 忽略空响应
+      if (!displayResponse.trim()) {
+        return;
+      }
+
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'timestamp';
+      timestampSpan.textContent = `${timestampStr} `;
+      timestampSpan.style.display = showTimestamp ? 'inline' : 'none';
+      timestampSpan.style.color = '#888';
+
+      const messageSpan = document.createElement('span');
+      messageSpan.className = 'message-content';
+      messageSpan.textContent = displayResponse;
+      messageSpan.style.color = '#FFA500'; // 使用橙色显示响应
+
+      messageDiv.appendChild(timestampSpan);
+      messageDiv.appendChild(messageSpan);
+      logDiv.appendChild(messageDiv);
+
+      while (logDiv.children.length > 500)
+      {
+        logDiv.removeChild(logDiv.firstChild);
+      }
+
+      logDiv.scrollTop = logDiv.scrollHeight;
+      void logDiv.offsetHeight;
+    }
+
+    // 将检测到的手势数值镜像到 Console（使用与串口相同时间戳）
+    function mirrorGestureToConsole(lineText, timestampStr)
+    {
+      try
+      {
+        if (typeof isProgramRunning !== 'undefined' && !isProgramRunning) return;
+        if (!(typeof window !== 'undefined' && window.__gestureActivated)) return;
+        const s = String(lineText || '').trim();
+        if (!/^\d+$/.test(s)) return;
+        const val = parseInt(s, 10);
+        if (val < 0 || val > 3) return;
+        addConsoleMessageAt([s], timestampStr);
+        const label = val===0?'Up': val===1?'Down': val===2?'Left': 'Right';
+        addConsoleMessageAt([label], timestampStr);
+      } catch (e) { /* ignore */ }
+    }
+
     function clearConsole()
     {
-      document.getElementById('consoleLog').innerHTML = '';
+      const el = document.getElementById('consoleLog');
+      if (el) el.innerHTML = '';
     }
 
     // 生成调试日志
@@ -2061,6 +2883,31 @@ Generated at: ${now.toISOString()}
     {
       // 检查是否为debug信息
       const message = Array.from(arguments).join(' ');
+      // 忽略空字符串或全空白打印，避免产生空行
+      if (arguments.length === 1 && typeof arguments[0] === 'string' && arguments[0].trim() === '')
+      {
+        originalLog.apply(console, arguments);
+        return;
+      }
+      // 忽略单个空数组打印([])的情况：当获取坐标无新值且返回[]时，不在Console输出
+      if (arguments.length === 1)
+      {
+        const arg0 = arguments[0];
+        if (Array.isArray(arg0) && arg0.length === 0)
+        {
+          originalLog.apply(console, arguments);
+          return;
+        }
+        if (typeof arg0 === 'object')
+        {
+          try { if (JSON.stringify(arg0) === '[]') { originalLog.apply(console, arguments); return; } } catch(_){}
+        }
+        if (typeof arg0 === 'string' && arg0.trim() === '[]')
+        {
+          originalLog.apply(console, arguments);
+          return;
+        }
+      }
       const isDebugMessage = isDebugInfo(message);
 
       // 如果是debug信息且debug开关关闭，则不显示
@@ -2083,7 +2930,44 @@ Generated at: ${now.toISOString()}
         /message type/,
         /send message/,
         /Program ended/,
-        /\[WebSocket\]/
+        /\[WebSocket\]/,
+        // Serial connection debug messages
+        /Serial connection successful, waiting for makeConnection/,
+        /Program execution started, stopExecution set to false/,
+        /Using serial connection to execute program/,
+        /Using WebSocket connection to execute program/,
+        /Serial connected, skipping WebSocket connection/,
+        /Getting IP address via serial/,
+        /Using existing IP address/,
+        /Keeping serial connection/,
+        /Program execution completed, resetting state/,
+        /Detected serial connection, executing program directly/,
+        // Command sending debug messages
+        /Sending command via serial/,
+        /Sending command via WiFi/,
+        /Trying WiFi connection/,
+        /Command sent via serial/,
+        /Sending command:/,
+        // IP address acquisition debug messages
+        /Getting IP address, waiting for completion/,
+        /IP address acquisition complete/,
+        /Successfully acquired IP address/,
+        // WebSocket connection debug messages
+        /WebSocket connection established/,
+        /WebSocket connection closed/,
+        // Buffer management debug messages
+        /Serial buffer cleared, keeping latest data/,
+        // Program execution flow messages (Chinese patterns for existing messages)
+        /串口连接成功，等待makeConnection/,
+        /程序开始执行，stopExecution设置为false/,
+        /使用串口连接执行程序/,
+        /使用WebSocket连接执行程序/,
+        /串口已连接，跳过WebSocket连接/,
+        /通过串口获取IP地址/,
+        /使用已有IP地址/,
+        /保持串口连接/,
+        /程序执行完成，重置状态/,
+        /检测到串口连接，直接执行程序/
       ];
 
       return debugPatterns.some(pattern => pattern.test(message));
@@ -2100,6 +2984,8 @@ Generated at: ${now.toISOString()}
 
     // 设备IP地址
     let currentDeviceIP = '192.168.4.1'; // 默认IP地址
+    let isGettingIP = false; // 标志是否正在获取IP地址
+    let hasShownWifiDialog = false; // 标志是否已经显示过WiFi配置对话框
 
     // 配置文件相关
     let config = {
@@ -2134,10 +3020,80 @@ Generated at: ${now.toISOString()}
       // 通用串口芯片厂商（只检查vendorId，不限制productId）
       { vendorId: 0x1a86, name: 'CH340/CH343' },  // 沁恒微电子（CH340、CH343等）
       { vendorId: 0x10c4, name: 'CP2102' },       // Silicon Labs（CP2102等）
+      { vendorId: 0x0403, name: 'FTDI' },        // FTDI (FT232/FT2232 等)
+      { vendorId: 0x067b, name: 'Prolific' },    // Prolific (PL2303 等)
+      { vendorId: 0x2341, name: 'Arduino' },     // Arduino (Arduino.cc)
+      { vendorId: 0x2a03, name: 'Arduino-org' }, // Arduino.org
+      { vendorId: 0x03eb, name: 'Microchip/Atmel' }, // UNO R3 16U2 等
       // ESP32内置USB（需要精确匹配）
       { vendorId: 0x303a, productId: 0x1001, name: 'ESP32-S2' }, // ESP32-S2 内置USB
       { vendorId: 0x303a, productId: 0x0002, name: 'ESP32-S3' }, // ESP32-S3 内置USB
     ];
+
+    // 构建供 Chrome 原生串口选择器使用的过滤规则
+    function buildWebSerialFilters()
+    {
+      try
+      {
+        // 在 Windows 上，很多 USB-UART 桥接芯片的 VID/PID 信息无法通过 Web Serial 匹配到，
+        // 传入 filters 反而会导致原生选择器显示 "no compatible devices found"。
+        // 因此在 Windows 上直接返回空数组，使用不带过滤器的选择器以展示所有可用的 COM 口。
+        const isWindows = (navigator.platform && navigator.platform.includes('Win')) ||
+          (navigator.userAgent && navigator.userAgent.includes('Windows'));
+
+        if (isWindows)
+        {
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log('Windows detected: using unfiltered serial picker');
+          }
+          return [];
+        }
+
+        const filters = [];
+        ESP32_USB_CHIPS.forEach(chip =>
+        {
+          if (chip.productId !== undefined)
+          {
+            filters.push({ usbVendorId: chip.vendorId, usbProductId: chip.productId });
+          } else
+          {
+            filters.push({ usbVendorId: chip.vendorId });
+          }
+        });
+        return filters;
+      } catch (e)
+      {
+        return [];
+      }
+    }
+
+    // 使用过滤器优先的串口请求封装；若因过滤器导致"no compatible devices found"，自动回退为无过滤请求
+    async function requestSerialPortWithFallback()
+    {
+      const builtFilters = buildWebSerialFilters();
+      try
+      {
+        // 如果没有过滤器，直接调用无参版本，展示所有端口
+        if (!builtFilters || builtFilters.length === 0)
+        {
+          return await navigator.serial.requestPort({});
+        }
+        return await navigator.serial.requestPort({ filters: builtFilters });
+      } catch (error)
+      {
+        // 当过滤器导致设备不匹配时，Chrome 会抛出 NotFoundError，消息通常包含 "compatible devices"
+        if (error && error.name === 'NotFoundError' && /compatible devices/i.test(error.message || ''))
+        {
+          if (typeof showDebug !== 'undefined' && showDebug)
+          {
+            console.log('Filtered picker returned no compatible devices, falling back to unfiltered picker');
+          }
+          return await navigator.serial.requestPort({});
+        }
+        throw error;
+      }
+    }
 
     // 系统检测函数
     function detectOperatingSystem()
@@ -2568,6 +3524,19 @@ Generated at: ${now.toISOString()}
       {
         console.log("Creating all ports selector dialog...");
 
+        // 清理可能存在的旧对话框
+        const existingOverlay = document.querySelector('.esp32-port-selector');
+        if (existingOverlay)
+        {
+          console.log("Removing existing port selector dialog");
+          document.body.removeChild(existingOverlay);
+        }
+
+        // 清理可能存在的全局函数
+        if (window.selectAllPort) delete window.selectAllPort;
+        if (window.selectSystemPort) delete window.selectSystemPort;
+        if (window.cancelAllPortSelection) delete window.cancelAllPortSelection;
+
         // 创建遮罩层
         const overlay = document.createElement('div');
         overlay.className = 'esp32-port-selector';
@@ -2623,10 +3592,7 @@ Generated at: ${now.toISOString()}
         window.selectAllPort = (index) =>
         {
           const selectedPort = ports[index];
-          document.body.removeChild(overlay);
-          delete window.selectAllPort;
-          delete window.selectSystemPort;
-          delete window.cancelAllPortSelection;
+          cleanupPortSelector();
           resolve(selectedPort);
         };
 
@@ -2634,11 +3600,9 @@ Generated at: ${now.toISOString()}
         {
           try
           {
-            const systemPort = await navigator.serial.requestPort();
-            document.body.removeChild(overlay);
-            delete window.selectAllPort;
-            delete window.selectSystemPort;
-            delete window.cancelAllPortSelection;
+            // 使用与页面自定义过滤一致的规则，直接应用到 Chrome 原生串口选择器
+            const systemPort = await navigator.serial.requestPort({ filters: buildWebSerialFilters() });
+            cleanupPortSelector();
             resolve(systemPort);
           } catch (error)
           {
@@ -2649,10 +3613,7 @@ Generated at: ${now.toISOString()}
             } else
             {
               console.error('Error in system port selection:', error);
-              document.body.removeChild(overlay);
-              delete window.selectAllPort;
-              delete window.selectSystemPort;
-              delete window.cancelAllPortSelection;
+              cleanupPortSelector();
               reject(error);
             }
           }
@@ -2660,12 +3621,29 @@ Generated at: ${now.toISOString()}
 
         window.cancelAllPortSelection = () =>
         {
-          document.body.removeChild(overlay);
+          cleanupPortSelector();
+          reject(new Error(getText("userCancelledSelection")));
+        };
+
+        // 清理函数
+        function cleanupPortSelector()
+        {
+          try
+          {
+            if (overlay && overlay.parentNode)
+            {
+              document.body.removeChild(overlay);
+            }
+          } catch (error)
+          {
+            console.warn('Error removing overlay:', error);
+          }
+
+          // 清理全局函数
           delete window.selectAllPort;
           delete window.selectSystemPort;
           delete window.cancelAllPortSelection;
-          reject(new Error(getText("userCancelledSelection")));
-        };
+        }
 
         // 将对话框添加到遮罩层中
         overlay.appendChild(dialog);
@@ -2673,6 +3651,67 @@ Generated at: ${now.toISOString()}
 
         console.log("All ports selector dialog created and added to DOM");
       });
+    }
+
+    // 清理残留对话框的函数
+    function cleanupResidualDialogs()
+    {
+      try
+      {
+        // 清理可能存在的串口选择对话框
+        const existingOverlays = document.querySelectorAll('.esp32-port-selector');
+        existingOverlays.forEach(overlay =>
+        {
+          try
+          {
+            if (overlay.parentNode)
+            {
+              document.body.removeChild(overlay);
+              console.log('Removed residual port selector dialog');
+            }
+          } catch (error)
+          {
+            console.warn('Error removing residual overlay:', error);
+          }
+        });
+
+        // 清理全局函数
+        if (window.selectAllPort) delete window.selectAllPort;
+        if (window.selectSystemPort) delete window.selectSystemPort;
+        if (window.cancelAllPortSelection) delete window.cancelAllPortSelection;
+
+        // 清理其他可能存在的对话框
+        const wifiDialog = document.querySelector('.wifi-dialog');
+        if (wifiDialog)
+        {
+          try
+          {
+            wifiDialog.remove();
+            console.log('Removed residual WiFi dialog');
+          } catch (error)
+          {
+            console.warn('Error removing WiFi dialog:', error);
+          }
+        }
+
+        const overlay = document.querySelector('.overlay');
+        if (overlay)
+        {
+          try
+          {
+            overlay.remove();
+            console.log('Removed residual overlay');
+          } catch (error)
+          {
+            console.warn('Error removing overlay:', error);
+          }
+        }
+
+        console.log('Cleanup of residual dialogs completed');
+      } catch (error)
+      {
+        console.warn('Error during cleanup of residual dialogs:', error);
+      }
     }
 
     async function openSerialPort()
@@ -2707,26 +3746,21 @@ Generated at: ${now.toISOString()}
           }
         }
 
-        // 显示有效串口的简要信息
-        if (typeof showDebug !== 'undefined' && showDebug)
+        // 显示有效串口的简要信息（总是打印，便于收集未知设备的VID/PID）
+        validPorts.forEach((port, index) =>
         {
-          validPorts.forEach((port, index) =>
+          try
           {
-            try
-            {
-              const displayName = getSmartPortDisplayName(port, validPorts);
-              const portInfo = port.getInfo();
-              const isESP32 = isESP32SerialPort(port);
-              console.log(getText("portInfo").replace("{index}", index + 1).replace("{name}", displayName));
-
-              // 显示硬件信息（用于诊断端口识别问题）
-              console.log(getText("hardwareInfo").replace("{vid}", portInfo.usbVendorId?.toString(16)).replace("{pid}", portInfo.usbProductId?.toString(16)).replace("{isESP32}", isESP32));
-            } catch (error)
-            {
-              console.log(getText("portInfoError").replace("{index}", index + 1));
-            }
-          });
-        }
+            const displayName = getSmartPortDisplayName(port, validPorts);
+            const portInfo = port.getInfo();
+            const isESP32 = isESP32SerialPort(port);
+            console.log(getText("portInfo").replace("{index}", index + 1).replace("{name}", displayName));
+            console.log(getText("hardwareInfo").replace("{vid}", portInfo.usbVendorId?.toString(16)).replace("{pid}", portInfo.usbProductId?.toString(16)).replace("{isESP32}", isESP32));
+          } catch (error)
+          {
+            console.log(getText("portInfoError").replace("{index}", index + 1));
+          }
+        });
 
         // 获取ESP32串口列表
         const esp32Ports = validPorts.filter(port => isESP32SerialPort(port));
@@ -2745,22 +3779,42 @@ Generated at: ${now.toISOString()}
           {
             console.log(getText("noAuthorizedPorts"));
           }
-          const selectPort = await navigator.serial.requestPort();
+          // 直接使用 Chrome 原生选择器（带过滤优先，必要时回退为无过滤）
+          const selectPort = await requestSerialPortWithFallback();
           port = selectPort;
+          try
+          {
+            const pinfo = port.getInfo();
+            console.log(getText("portInfo").replace("{index}", 1).replace("{name}", getSerialPortDisplayName(port)));
+            console.log(getText("hardwareInfo").replace("{vid}", pinfo.usbVendorId?.toString(16)).replace("{pid}", pinfo.usbProductId?.toString(16)).replace("{isESP32}", isESP32SerialPort(port)));
+          } catch (e) { /* ignore */ }
         } else
         {
-          // 显示包含所有端口选择的对话框（包括"选择其他端口"选项）
+          // 统一走 Chrome 原生选择器（带过滤优先，必要时回退为无过滤）
           if (typeof showDebug !== 'undefined' && showDebug)
           {
             console.log(getText("showingPortsForSelection").replace("{count}", validPorts.length));
           }
-          port = await createAllPortsSelector(validPorts);
+          port = await requestSerialPortWithFallback();
+          try
+          {
+            const pinfo = port.getInfo();
+            console.log(getText("portInfo").replace("{index}", 1).replace("{name}", getSerialPortDisplayName(port)));
+            console.log(getText("hardwareInfo").replace("{vid}", pinfo.usbVendorId?.toString(16)).replace("{pid}", pinfo.usbProductId?.toString(16)).replace("{isESP32}", isESP32SerialPort(port)));
+          } catch (e) { /* ignore */ }
         }
 
         // 连接串口
         try
         {
-          await port.open({ baudRate: 115200 });
+          // 统一波特率为 115200（与固件设置一致）
+          let defaultBaud = 115200;
+
+          await port.open({ baudRate: defaultBaud });
+          // 部分板卡（如 Arduino/16U2 桥接）需要置位 DTR/RTS 才会输出数据
+          try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch (e) { /* ignore */ }
+          // 打开后短暂等待，给自动复位的板卡时间启动固件
+          await new Promise(resolve => setTimeout(resolve, 300));
           console.log(getText("esp32PortConnected"));
         } catch (portError)
         {
@@ -2784,21 +3838,13 @@ Generated at: ${now.toISOString()}
         reader = port.readable.getReader();
         writer = port.writable.getWriter();
 
-        // 验证串口连接 - 发送'?'字符并等待回复
-        console.log(getText("validatingSerialConnection"));
-        const validationResult = await validateSerialConnection();
-
-        if (!validationResult)
+        // 尝试获取设备信息（非强制）：发送'?'查询机型/版本，但不再以此作为打开串口的前置条件
+        try
         {
-          // 验证失败，立即显示错误窗口，然后快速关闭串口
-          console.log(getText("serialValidationFailed"));
-          showCustomAlert(getText("serialValidationFailed"), getText("connectionFailed"));
-          // 快速关闭串口，不等待超时
-          quickCloseSerialPort();
-          return;
-        }
-
-        console.log(getText("serialValidationSuccess"));
+          console.log(getText("validatingSerialConnection"));
+          // 异步尝试，不阻塞也不影响后续流程
+          validateSerialConnection().catch(() => { /* ignore validation errors */ });
+        } catch (e) { /* ignore */ }
 
         // 验证成功后显示串口界面
         const serialInterface = document.getElementById('serialInterface');
@@ -2823,10 +3869,16 @@ Generated at: ${now.toISOString()}
 
         // 更新串口标题显示连接的设备信息
         const serialTitle = document.getElementById('serialOutputTitle');
-        if (serialTitle)
+        const serialPortInfo = document.getElementById('serialPortInfo');
+        if (serialTitle && serialPortInfo)
         {
           const displayName = getSerialPortDisplayName(port);
-          serialTitle.textContent = getText("serialMonitorTitle").replace("{portName}", displayName);
+          // 保持标题为"Serial Monitor"
+          serialTitle.textContent = getText("serialOutput");
+          // 在下一行显示端口名称，截断路径字符
+          const truncatedName = displayName.split(/[.\\/]/).pop();
+          serialPortInfo.textContent = truncatedName;
+          serialPortInfo.style.display = 'block';
         }
 
         // 强制重新调整工作区大小，确保布局不变
@@ -2858,8 +3910,8 @@ Generated at: ${now.toISOString()}
         // 开始读取串口数据
         readSerialData();
 
-        // 连接成功后自动发送'w'指令获取IP地址
-        await sendWifiCommand();
+        // 串口连接成功，IP地址将由makeConnection积木统一处理
+        if (showDebug) console.log(getText("serialConnectedWaitingMakeConnection"));
 
       } catch (error)
       {
@@ -2868,6 +3920,25 @@ Generated at: ${now.toISOString()}
         port = null;
         writer = null;
         reader = null;
+
+        // 清理可能存在的对话框
+        const existingOverlay = document.querySelector('.esp32-port-selector');
+        if (existingOverlay)
+        {
+          try
+          {
+            document.body.removeChild(existingOverlay);
+          } catch (cleanupError)
+          {
+            console.warn('Error removing overlay after connection failure:', cleanupError);
+          }
+        }
+
+        // 清理全局函数
+        if (window.selectAllPort) delete window.selectAllPort;
+        if (window.selectSystemPort) delete window.selectSystemPort;
+        if (window.cancelAllPortSelection) delete window.cancelAllPortSelection;
+
         // 只有在没有WebSocket连接时才重置Quick Connect按钮
         // 如果有currentDeviceIP，说明可能还有WebSocket连接，不重置按钮
         if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
@@ -2935,9 +4006,14 @@ Generated at: ${now.toISOString()}
 
         // 重置串口监视器标题
         const serialTitle = document.getElementById('serialOutputTitle');
+        const serialPortInfo = document.getElementById('serialPortInfo');
         if (serialTitle)
         {
           serialTitle.textContent = getText("serialOutput");
+        }
+        if (serialPortInfo)
+        {
+          serialPortInfo.style.display = 'none';
         }
 
         console.log('Quick serial port close completed');
@@ -3031,9 +4107,14 @@ Generated at: ${now.toISOString()}
 
         // 重置串口监视器标题
         const serialTitle = document.getElementById('serialOutputTitle');
+        const serialPortInfo = document.getElementById('serialPortInfo');
         if (serialTitle)
         {
           serialTitle.textContent = getText("serialOutput");
+        }
+        if (serialPortInfo)
+        {
+          serialPortInfo.style.display = 'none';
         }
 
         // 只有在没有WebSocket连接时才重置Quick Connect按钮
@@ -3062,7 +4143,8 @@ Generated at: ${now.toISOString()}
       }
     }
 
-    async function quickConnect()
+    // WiFi连接处理函数（内部使用）
+    async function handleWifiConnection(forceShowDialog = false)
     {
       // 检查串口是否已连接
       if (!port)
@@ -3085,7 +4167,7 @@ Generated at: ${now.toISOString()}
           {
             // 如果配置的IP地址也连接失败，显示WiFi配置对话框
             console.log('Both serial and configured IP failed, showing WiFi config dialog');
-            showWifiConfigDialog();
+            showWifiConfigDialog(forceShowDialog);
             return; // 显示WiFi配置界面后退出
           }
         }
@@ -3094,8 +4176,14 @@ Generated at: ${now.toISOString()}
       // 如果串口已连接，尝试发送WiFi命令获取IP地址
       if (writer)
       {
-        await sendWifiCommand();
+        await sendWifiCommandInternal(forceShowDialog);
       }
+    }
+
+    async function quickConnect()
+    {
+      // Quick Connect总是强制显示WiFi配置对话框（如果需要）
+      await handleWifiConnection(true);
     }
 
     function closeWifiDialog()
@@ -3106,50 +4194,102 @@ Generated at: ${now.toISOString()}
       if (overlay) overlay.remove();
     }
 
-    // 发送WiFi命令获取IP地址
-    async function sendWifiCommand()
+    // 发送WiFi命令获取IP地址（内部使用）
+    async function sendWifiCommandInternal(forceShowDialog = false)
     {
       if (!writer)
       {
         console.log(getText('noSerialWriterAvailable'));
-        showWifiConfigDialog();
-        return;
+        showWifiConfigDialog(forceShowDialog);
+        return Promise.reject(new Error('No serial writer available'));
+      }
+
+      // 如果正在获取IP，等待之前的操作完成
+      if (isGettingIP)
+      {
+        if (showDebug) console.log(getText('gettingIPAddressWaiting'));
+        return new Promise((resolve) =>
+        {
+          const checkInterval = setInterval(() =>
+          {
+            if (!isGettingIP)
+            {
+              clearInterval(checkInterval);
+              if (showDebug) console.log(getText('ipAddressAcquisitionComplete') + ': ' + currentDeviceIP);
+              resolve();
+            }
+          }, 500);
+        });
       }
 
       try
       {
+        isGettingIP = true;
         // 发送'w'指令获取IP地址
         const command = 'w\n';
         await writer.write(new TextEncoder().encode(command));
         console.log(getText('wifiCommandSent'));
 
-        // 等待一段时间让设备响应
-        setTimeout(() =>
+        // 返回一个Promise，等待IP地址获取
+        return new Promise((resolve, reject) =>
         {
-          // 检查是否获取到了IP地址
-          if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+          // 等待一段时间让设备响应
+          setTimeout(() =>
           {
-            // 如果没有获取到IP地址或获取到的是默认AP模式IP，显示WiFi配置界面
-            console.log(getText('noValidIPReceived'));
-            showWifiConfigDialog();
-          }
-        }, 3000); // 等待3秒
+            isGettingIP = false;
+            // 检查是否获取到了IP地址
+            if (!currentDeviceIP || currentDeviceIP === '192.168.4.1')
+            {
+              // 如果没有获取到IP地址或获取到的是默认AP模式IP，显示WiFi配置界面
+              console.log(getText('noValidIPReceived'));
+              showWifiConfigDialog(forceShowDialog);
+              resolve(); // 即使没有获取到IP也resolve，让程序继续执行
+            } else
+            {
+              if (showDebug) console.log(getText('successfullyAcquiredIPAddress') + ': ' + currentDeviceIP);
+              // 成功获取IP地址后重置WiFi对话框标志，允许下次失败时再次显示
+              hasShownWifiDialog = false;
+              resolve();
+            }
+          }, 3000); // 等待3秒
+        });
 
       } catch (error)
       {
+        isGettingIP = false;
         console.error('Failed to send WiFi command:', error);
         // 发送失败时显示WiFi配置界面
-        showWifiConfigDialog();
+        showWifiConfigDialog(forceShowDialog);
+        return Promise.reject(error);
       }
     }
 
-    // 显示WiFi配置对话框
-    function showWifiConfigDialog()
+    // 发送WiFi命令获取IP地址（公共接口）
+    async function sendWifiCommand()
     {
+      await sendWifiCommandInternal(false); // 默认不强制显示对话框
+    }
+
+    // 显示WiFi配置对话框
+    function showWifiConfigDialog(forceShow = false)
+    {
+      // 如果不是强制显示，检查是否已经显示过WiFi配置对话框
+      if (!forceShow && hasShownWifiDialog)
+      {
+        if (showDebug) console.log(getText('debugWiFiDialogAlreadyShown'));
+        return;
+      }
+
       // 检查是否已经存在对话框，避免重复创建
       if (document.querySelector('.wifi-dialog'))
       {
         return;
+      }
+
+      // 只有在非强制显示时才标记已经显示过WiFi配置对话框
+      if (!forceShow)
+      {
+        hasShownWifiDialog = true;
       }
 
       // 创建遮罩层
@@ -3163,7 +4303,7 @@ Generated at: ${now.toISOString()}
       dialog.innerHTML = `
         <h3>${getText("wifiConfig")}</h3>
         <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-          ${getText("wifiConfigDescription") || "Please enter your WiFi credentials to connect the robot to your network."}
+          ${getText("wifiConfigDescription")}
         </p>
         <input type="text" id="ssidInput" placeholder="${getText("ssidPlaceholder")}" autocomplete="off">
         <input type="password" id="passwordInput" placeholder="${getText("passwordPlaceholder")}" autocomplete="off">
@@ -3389,10 +4529,6 @@ Generated at: ${now.toISOString()}
       }
     }
 
-
-
-
-
     // 测试串口选择窗口居中显示
     function testPortSelectorCentering()
     {
@@ -3500,88 +4636,73 @@ Generated at: ${now.toISOString()}
 
 
 
-    // 验证串口连接 - 发送'?'字符并检查回复
+    // 验证串口连接 - 发送'?'字符并基于缓冲区轮询检查回复（避免与读取循环争用 reader）
     async function validateSerialConnection()
     {
       try
       {
-        // 清空之前的缓冲区
+        // 清空之前的缓冲区（仅影响验证期的匹配，不影响输出渲染）
         serialBufferText = '';
         serialBuffer = '';
 
-        // 发送'?'字符
-        const encoder = new TextEncoder();
-        const data = encoder.encode('?');
-        await writer.write(data);
-        console.log(getText("sentValidationCommand"));
-
-        // 根据操作系统设置等待时间
+        // 根据操作系统设置等待时间和重试次数
         const os = OPERATING_SYSTEM;
-        const waitTime = (os === 'windows') ? TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_WINDOWS : TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_OTHER; // 使用配置的验证超时时间
+        const waitTime = (os === 'windows') ? TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_WINDOWS : TIMEOUT_CONFIG.UI.VALIDATION_TIMEOUT_OTHER;
+        const maxRetries = (os === 'windows') ? 3 : 1; // Windows系统重试3次，其他系统重试1次
 
-        const startTime = Date.now();
-        let response = '';
-        let validationTimeout = false;
-
-        // 设置超时时间
-        const timeoutPromise = new Promise((resolve) =>
+        const encoder = new TextEncoder();
+        for (let attempt = 1; attempt <= maxRetries; attempt++)
         {
-          setTimeout(() =>
+          try
           {
-            validationTimeout = true;
-            resolve();
-          }, waitTime);
-        });
+            console.log(getText("sentValidationCommand") + ` (attempt ${attempt}/${maxRetries})`);
 
-        // 等待回复或超时
-        const responsePromise = new Promise(async (resolve) =>
-        {
-          while (!validationTimeout && Date.now() - startTime < waitTime)
-          {
-            try
+            // 发送'?'字符（不少固件单字符命令无需换行）
+            await writer.write(encoder.encode('?'));
+
+            const startTime = Date.now();
+            const keywordRegex = /(Bittle|Nybble|Petoi|Chero)/i;
+            let matched = false;
+
+            // 轮询缓冲区，等待固件自报信息
+            while (Date.now() - startTime < waitTime)
             {
-              const { value, done } = await reader.read();
-              if (done) break;
-
-              const text = new TextDecoder().decode(value);
-              response += text;
-
-              // 检查是否包含Petoi设备标识
-              if (response.includes('Bittle') || response.includes('Nybble') || response.includes('Petoi') || response.includes('Chero'))
+              if (serialBuffer && keywordRegex.test(serialBuffer))
               {
-                // 提取设备型号信息用于控制台显示
-                const cleanResponse = response.replace(/[\r\n?]+/g, ' ').trim();
-                const modelInfo = cleanResponse.replace(/\s*\?\s*$/, '').trim();
-                console.log(getText("model") + ":", modelInfo);
-
-                resolve(true);
-                return;
-              }
-
-              // 如果已经超过等待时间，停止等待
-              if (Date.now() - startTime >= waitTime)
-              {
+                matched = true;
+                // 提取一段可读信息用于展示
+                const snippet = serialBuffer.replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
+                console.log(getText("model") + ":", snippet);
                 break;
               }
-            } catch (error)
+              await new Promise(r => setTimeout(r, 50));
+            }
+
+            if (!matched)
             {
-              console.warn("Error reading during validation:", error);
-              break;
+              console.log(getText("serialValidationTimeout") + ` (attempt ${attempt}/${maxRetries})`);
+              if (attempt < maxRetries)
+              {
+                console.log(`Retrying validation in 1 second...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+              }
+              return false; // 未匹配不致命
+            }
+
+            console.log(`Validation successful on attempt ${attempt}`);
+            return true;
+          } catch (error)
+          {
+            console.warn(`Validation attempt ${attempt} failed:`, error);
+            if (attempt < maxRetries)
+            {
+              await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
-          resolve(false);
-        });
-
-        // 等待第一个完成的Promise
-        const result = await Promise.race([responsePromise, timeoutPromise]);
-
-        if (validationTimeout)
-        {
-          console.log(getText("serialValidationTimeout"));
-          return false;
         }
 
-        return result;
+        return false;
       } catch (error)
       {
         console.error(getText("serialValidationError"), error);
@@ -3604,37 +4725,26 @@ Generated at: ${now.toISOString()}
           const text = new TextDecoder().decode(value);
           if (!text) continue; // 如果没有数据，跳过
           serialBufferText += text;
-          const lastLineIndex = serialBufferText.lastIndexOf('\r\n');
-          const linesText = serialBufferText.substring(0, lastLineIndex) + '\r\n';
-          const lines = linesText.split('\r\n');
-          serialBufferText = serialBufferText.substring(lastLineIndex + 2); // 保留剩余部分
-          serialBuffer += text; // 添加到serialBuffer
+          // 统一换行并按最后一个换行边界切片，避免丢行（兼容 \r\n / \n / \r）
+          let normalizedBuffer = serialBufferText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+          const lastBreak = normalizedBuffer.lastIndexOf('\n');
+          const chunkText = lastBreak >= 0 ? normalizedBuffer.substring(0, lastBreak + 1) : '';
+          // 提取每一行的到达时间戳，解决 Console 时间戳先于串口显示的问题
+          const nowTs = getFormattedTimestamp();
+          const lines = chunkText ? chunkText.split('\n').filter(l => l.length > 0) : [];
+          const lineTimestamps = lines.map(() => nowTs);
+          // 保留未完整的一行到下一次
+          serialBufferText = lastBreak >= 0 ? normalizedBuffer.substring(lastBreak + 1) : serialBufferText;
+          serialBuffer += text; // 添加到serialBuffer用于响应处理
 
-          // 监听特定格式的输出：类似 "=\r\n4894\r\nR\r\n" 的格式
-          // 改进的数据解析逻辑，防止数据分割问题
-          const patternMatch = linesText.match(/=\r\n([^\r\n]+)\r\n[a-zA-Z]{1}\r\n/);
-          if (patternMatch)
-          {
-            // 提取第二行内容（第一行是"="，第二行是数字，第三行是"R"）
-            const secondLine = patternMatch[1];
-
-            // 验证数据完整性：确保是纯数字
-            if (/^\d+$/.test(secondLine))
-            {
-              addConsoleMessage(secondLine);
-            } else
-            {
-              console.warn('检测到不完整的传感器数据:', secondLine);
-              // 不输出不完整的数据，等待完整数据包
-            }
-          }
+          // 旧的解析逻辑已移除，现在由waitForSerialResponse函数统一处理传感器数据
 
           // 改进的缓冲区管理，防止内存泄漏和数据丢失
           if (serialBuffer.length > 20000) // 增加缓冲区大小
           {
             // 保留最后10000个字符，确保不丢失重要数据
             serialBuffer = serialBuffer.substring(serialBuffer.length - 10000);
-            console.warn('串口缓冲区已清理，保留最新数据');
+            if (showDebug) console.warn(getText('serialBufferClearedKeepLatest'));
           }
 
           for (let line of lines.reverse())
@@ -3666,6 +4776,96 @@ Generated at: ${now.toISOString()}
               break; // 找到IP地址后跳出循环
             }
           }
+
+          // 手势帧与相机坐标帧检测：当串口有新数据打印时，立即镜像到 Console，时间戳一致
+          (function detectGestureFrames(arr, tsArr){
+            try {
+              const consumed = new Set();
+              // 先匹配三行完整帧 = / number / X
+              for (let i = 0; i + 2 < arr.length; i++)
+              {
+                const a = (arr[i]||'').trim();
+                const b = (arr[i+1]||'').trim();
+                const c = (arr[i+2]||'').trim();
+                if (a === '=' && /^\d+$/.test(b) && c === 'X')
+                {
+                  // 使用对应行的到达时间戳，贴近串口显示
+                  const ts = tsArr[i] || nowTs;
+                  mirrorGestureToConsole(b, ts);
+                  consumed.add(i); consumed.add(i+1); consumed.add(i+2);
+                  i += 2;
+                }
+              }
+              // 再兼容单行数值（设备可能直接输出 0/1/2/3），且在手势模式下才启用
+              const gestureMode = (typeof window !== 'undefined' && !!window.__gestureActivated);
+              const isRun = (typeof isProgramRunning !== 'undefined' && !!isProgramRunning);
+              if (gestureMode && isRun)
+              {
+                for (let i = 0; i < arr.length; i++)
+                {
+                  if (consumed.has(i)) continue;
+                  const s = (arr[i]||'').trim();
+                  if (/^\d+$/.test(s))
+                  {
+                    // 使用该数值行到达时的时间戳
+                    const ts = tsArr[i] || nowTs;
+                    mirrorGestureToConsole(s, ts);
+                  }
+                }
+              }
+
+              // 相机坐标帧镜像：仅在程序运行期间同步到 Console
+              const camRunning = (typeof window !== 'undefined' && !!window.__cameraQueryActive);
+              const mirrorCamera = (typeof window !== 'undefined' && !!window.__mirrorCameraToConsole);
+              if (camRunning && mirrorCamera) {
+                // 兼容两种格式：
+                // 1) 三行帧：= / "x y size = w h" / X
+                // 2) 单行帧：直接一行坐标（-65.00 -2.00 size = 97 138）
+                const coordRegex = /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+size\s*=\s*(\d+)\s+(\d+)/i;
+                for (let i = 0; i + 2 < arr.length; i++)
+                {
+                  if (consumed.has(i)) continue;
+                  const a = (arr[i]||'').trim();
+                  const b = (arr[i+1]||'').trim();
+                  const c = (arr[i+2]||'').trim();
+                  const m = b.match(coordRegex);
+                  if (a === '=' && m && c === 'X')
+                  {
+                    const ts = tsArr[i] || nowTs;
+                    if (typeof window !== 'undefined') {
+                      window.__lastCameraTs = ts;
+                      window.__lastCameraCoords = [m[1], m[2], m[3], m[4]].join(',');
+                    }
+                    if (typeof window === 'undefined' || !window.__cameraMirrorDone) {
+                      addConsoleMessageAt([[m[1], m[2], m[3], m[4]].join(',')], ts);
+                      if (typeof window !== 'undefined') window.__cameraMirrorDone = true;
+                    }
+                    consumed.add(i); consumed.add(i+1); consumed.add(i+2);
+                    i += 2;
+                  }
+                }
+                // 单行坐标
+                for (let i = 0; i < arr.length; i++)
+                {
+                  if (consumed.has(i)) continue;
+                  const s = (arr[i]||'').trim();
+                  const m = s.match(coordRegex);
+                  if (m)
+                  {
+                    const ts = tsArr[i] || nowTs;
+                    if (typeof window !== 'undefined') {
+                      window.__lastCameraTs = ts;
+                      window.__lastCameraCoords = [m[1], m[2], m[3], m[4]].join(',');
+                    }
+                    if (typeof window === 'undefined' || !window.__cameraMirrorDone) {
+                      addConsoleMessageAt([[m[1], m[2], m[3], m[4]].join(',')], ts);
+                      if (typeof window !== 'undefined') window.__cameraMirrorDone = true;
+                    }
+                  }
+                }
+              }
+            } catch (e) { /* ignore */ }
+          })(lines, lineTimestamps);
 
           // 将数据添加到缓冲区
           serialOutputBuffer += text;
@@ -3750,9 +4950,14 @@ Generated at: ${now.toISOString()}
 
           // 重置串口监视器标题
           const serialTitle = document.getElementById('serialOutputTitle');
+          const serialPortInfo = document.getElementById('serialPortInfo');
           if (serialTitle)
           {
             serialTitle.textContent = getText("serialOutput");
+          }
+          if (serialPortInfo)
+          {
+            serialPortInfo.style.display = 'none';
           }
 
           // 只有在没有WebSocket连接时才重置Quick Connect按钮
@@ -4028,6 +5233,65 @@ Generated at: ${now.toISOString()}
       {
         console.log(getText("invalidIPFormat").replace("{ip}", ip));
       }
+    }
+
+    // 等待串口返回指定 token 单独一行（用于动作完成判定）
+    // 重要：只能匹配“新增数据”里的 token，避免命中缓冲区里旧的 token（会导致后续动作不等待就继续执行）
+    // - expectedToken: 例如 'k' / 'm' / 'd' / 'B' ...
+    // - timeoutMs: 超时毫秒
+    // - fromIndex: 可选，指定从 serialBuffer 的哪个下标开始等待（推荐在发送命令前记录 serialBuffer.length 传入）
+    async function waitForSerialTokenLine(expectedToken = 'm', timeoutMs = 15000, fromIndex)
+    {
+      try
+      {
+        const start = Date.now();
+        const buf = (typeof serialBuffer === 'string')
+          ? serialBuffer
+          : ((typeof window !== 'undefined' && typeof window.serialBuffer === 'string') ? window.serialBuffer : '');
+
+        // 只从指定起点（或当前末尾）开始匹配，避免命中旧 token
+        let lastIndex = (typeof fromIndex === 'number' && isFinite(fromIndex) && fromIndex >= 0)
+          ? Math.min(fromIndex, buf.length)
+          : buf.length;
+
+        // 先检查 fromIndex~当前末尾这一段（覆盖“token 刚好在调用前到达”的竞态）
+        if (buf.length > lastIndex)
+        {
+          const fragment0 = buf.substring(lastIndex);
+          lastIndex = buf.length;
+          const norm0 = fragment0.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+          const lines0 = norm0.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+          for (const line of lines0)
+          {
+            if (line === expectedToken)
+            {
+              return true;
+            }
+          }
+        }
+
+        // 然后进入增量等待，仅消费新增内容
+        while (Date.now() - start < timeoutMs)
+        {
+          const currentLen = typeof serialBuffer === 'string' ? serialBuffer.length : 0;
+          if (currentLen > lastIndex)
+          {
+            const fragment = serialBuffer.substring(lastIndex, currentLen);
+            lastIndex = currentLen;
+            const norm = fragment.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const lines = norm.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+            for (const line of lines)
+            {
+              if (line === expectedToken)
+              {
+                return true;
+              }
+            }
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+      } catch (e) { /* ignore */ }
+      return false;
     }
 
     async function sendSerialData()

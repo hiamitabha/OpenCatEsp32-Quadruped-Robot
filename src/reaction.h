@@ -4,7 +4,7 @@
 // Async web server function declarations
 #ifdef WEB_SERVER
 void completeWebTask();
-void errorWebTask(String errorMessage);
+void errorWebTask(const String & errorMessage);
 void finishWebCommand();
 #endif
 
@@ -197,6 +197,11 @@ void dealWithExceptions() {
 
 #ifdef WEB_SERVER  // check if to reset the wifi manager and reboot
   if (digitalRead(0) == LOW) {
+    delay(5);
+    // PTLF("Debounce boot button.");
+    if (digitalRead(0) != LOW)
+      return;
+
 #ifdef I2C_EEPROM_ADDRESS
     i2c_eeprom_write_byte(EEPROM_WIFI_MANAGER, true);
 #else
@@ -352,7 +357,7 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
       idleTimer = millis();
     if (newCmdIdx < 5 && lowerToken != T_BEEP && token != T_MEOW && token != T_LISTED_BIN
         && token != T_INDEXED_SIMULTANEOUS_BIN && token != T_TILT && token != T_READ && token != T_WRITE
-        && token != T_JOYSTICK)
+        && token != T_JOYSTICK && token != T_EXTENSION)
       beep(15 + newCmdIdx, 5);  // ToDo: check the muted sound when newCmdIdx = -1
     if (!workingStiffness
         && (lowerToken == T_SKILL || lowerToken == T_INDEXED_SEQUENTIAL_ASC
@@ -499,37 +504,63 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
         {
           gyroBalanceQ = !gyroBalanceQ;
           token = gyroBalanceQ ? 'G' : 'g'; // G for activated gyro
+          resetAdjust();
         }
         else
         {
           if (newCmd[0] == C_GYRO_CALIBRATE)
           {
             shutServos();
+            PTLF("Setting updateGyroQ to false...");
             updateGyroQ = false;
             if (newCmd[1] != C1_GYRO_CALIBRATE_IMMEDIATELY)
             {
               PTLF("\nPut the robot FLAT on the table and don't touch it during calibration.");
               beep(8, 500, 500, 5);
               beep(15, 500, 500, 1);
-              // Calibrate IMU using core 0 (reboot is no longer required)
-              // xTaskNotifyGive(taskCalibrateImuUsingCore0_handle);  // Send notification to this task on Core 0
             }
-            // Create calibration task to be run on Core 0
+            
+            // Wait for IMU task to terminate completely
+            if (TASK_imu != NULL) {
+              PTLF("Waiting for IMU task to terminate before calibration...");
+              // Wait for IMU task to terminate
+              while (eTaskGetState(TASK_imu) != eDeleted) {
+                  if(eTaskGetState(TASK_imu)== eReady){
+                      TASK_imu = NULL;
+                      break;
+                  }
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+              }
+            }
+            
+            // Create calibration task to run on core 0
             xTaskCreatePinnedToCore(
                 taskCalibrateImuUsingCore0,         // Task function
                 "taskCalibrateImuUsingCore0",       // Task name
-                1800,                               // Task stack size: 1560 bytes determined by uxTaskGetStackHighWaterMark() in bool readIMU()
+                1800,                               // Task stack size (restored to original value)
                 NULL,                               // Task parameters
                 1,                                  // Task priority
                 &taskCalibrateImuUsingCore0_handle, // Task handle
                 0                                   // Task core number to run on
             );
-            // Calibrate IMU using core 0 (reboot is no longer required)
-            // xTaskNotifyGive(taskCalibrateImuUsingCore0_handle);  // Send notification to this task on Core 0
-            while (!updateGyroQ)
-              delay(1);
-            delay(3000); // allow the imu to stablize after calibration
+            
+            // Wait for updateGyroQ to be re-set to true, indicating calibration completion
+            unsigned long waitStart = millis();
+            const unsigned long maxWaitTime = 10000; // Maximum waiting time 10 seconds
+            
+            while (!updateGyroQ) {
+              if (millis() - waitStart > maxWaitTime) {
+                PTLF("Timeout waiting for calibration to complete. Forcing continuation.");
+                updateGyroQ = true; // Force continuation
+                break;
+              }
+              vTaskDelay(100 / portTICK_PERIOD_MS);
+            }
+            
+            PTLF("Calibration completed, allowing IMU to stabilize...");
+            delay(3000); // Allow IMU to stabilize after calibration
             beep(18, 50, 50, 6);
+            createIMUTask();
           }
           else
           {
@@ -541,10 +572,32 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
                 fineAdjustQ = (newCmd[i] == C_GYRO_FINENESS); // if newCmd[i] == T_GYRO_FINENESS, fineAdjustQ is true. else newCmd[i] == C_GYRO_FINENESS_OFF, fineAdjustQ is false.
                 token = fineAdjustQ ? 'G' : 'g';              // G for activated gyro
               }
-              else if (toupper(newCmd[i]) == C_GYRO_BALANCE)  // if newCmd[i] is 'b' or 'B'
+              else if (toupper(newCmd[i]) == C_GYRO_BALANCE){  // if newCmd[i] is 'b' or 'B'
                 gyroBalanceQ = (newCmd[i] == C_GYRO_BALANCE); // if newCmd[i] == T_GYRO_FINENESS, gyroBalanceQ is true. else is false.
-              else if (toupper(newCmd[i]) == C_GYRO_UPDATE)  // if newCmd[i] is 'u' or 'U' - Update gyro reading
-                updateGyroQ = (newCmd[i] == C_GYRO_UPDATE); // if newCmd[i] == 'U', updateGyroQ is true. else 'u', updateGyroQ is false.
+                if (!gyroBalanceQ) {
+                  gyroBalanceQ = false;
+                  printToAllPorts('g');
+                  resetAdjust();
+                }
+                else if (!updateGyroQ) {
+                  updateGyroQ = true;
+                  createIMUTask();
+                }
+              }
+              else if (toupper(newCmd[i]) == C_GYRO_UPDATE) { // if newCmd[i] is 'u' or 'U' - Update gyro reading
+                bool newState = (newCmd[i] == C_GYRO_UPDATE); // if newCmd[i] == 'U', updateGyroQ is true. else 'u', updateGyroQ is false.
+                if (!newState) {
+                  updateGyroQ = false;
+                  gyroBalanceQ = false;
+                  printToAllPorts('g');
+                  resetAdjust();
+                }
+                else if (newState && !updateGyroQ) {
+                  updateGyroQ = true;
+                  gyroBalanceQ = true;
+                  createIMUTask();
+                }
+              }
               else if (toupper(newCmd[i]) == C_PRINT)
               {                                      // if newCmd[i] is 'p' or 'P'
                 printGyroQ = (newCmd[i] == C_PRINT); // if newCmd[i] == T_GYRO_PRINT, always print gyro. else only print once
@@ -707,9 +760,13 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
           while ((char)newCmd[flush126] == '~')
             flush126++;
           if ((int8_t)newCmd[flush126] == -126) {  // case: button
-            strcpy(buttonCmd, newCmd + flush126 + 1);
+            // Use strncpy with bounds checking to prevent buffer overflow
+            // buttonCmd is 20 bytes, so max length is 19 (including null terminator)
+            const int BUTTON_CMD_MAX_LEN = 19;
+            strncpy(buttonCmd, newCmd + flush126 + 1, BUTTON_CMD_MAX_LEN);
+            buttonCmd[BUTTON_CMD_MAX_LEN] = '\0';  // Ensure null termination
             int j = 0;
-            while (buttonCmd[j] != '\0') {
+            while (buttonCmd[j] != '\0' && j < BUTTON_CMD_MAX_LEN) {
               if (buttonCmd[j] == '\n' || buttonCmd[j] == '~') {
                 buttonCmd[j] = '\0';
                 break;
@@ -745,9 +802,16 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
             char suffix[2] = { joystickDirCmd[dirMap[dirY + 2][dirX + 1]] };
             PTHL("suffix", suffix[0]);
             if (buttonCmd[0] != '\0') {
-              strcat(buttonCmd, suffix);
-              PTHL("joystick cmd", buttonCmd + 1);
-              tQueue->addTask(buttonCmd[0], buttonCmd + 1);
+              // Check buffer bounds before strcat to prevent overflow
+              const int BUTTON_CMD_MAX_LEN = 19;
+              int currentLen = strlen(buttonCmd);
+              if (currentLen < BUTTON_CMD_MAX_LEN - 1) {  // Leave room for suffix + null terminator
+                strcat(buttonCmd, suffix);
+                PTHL("joystick cmd", buttonCmd + 1);
+                tQueue->addTask(buttonCmd[0], buttonCmd + 1);
+              } else {
+                PTLF("WARNING: buttonCmd buffer full, skipping suffix append");
+              }
               buttonCmd[0] = '\0';
               delay(500);
             }
@@ -783,7 +847,9 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
             targetFrame[DOF] = '~';
             
             char *cmdForParsing = new char[cmdLen + 1];
-            strcpy(cmdForParsing, newCmd);
+            // Use strncpy with bounds checking to prevent buffer overflow
+            strncpy(cmdForParsing, newCmd, cmdLen);
+            cmdForParsing[cmdLen] = '\0';  // Ensure null termination
             if (token == T_SERVO_CALIBRATE && lastToken != T_SERVO_CALIBRATE) {
               #ifdef T_SERVO_MICROSECOND
                                 setServoP(P_HARD);
@@ -956,10 +1022,10 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
               // delay(5);
             } while (pch != NULL);
             
-            // 释放动态分配的内存
+            // Release dynamically allocated memory
             delete[] cmdForParsing;
             
-            // 对于校准命令，在循环结束后打印校准值
+            // For calibration commands, print calibration values after the loop
             if (token == T_SERVO_CALIBRATE) {
               printToAllPorts(range2String(DOF));
               printToAllPorts(list2String(servoCalib));
@@ -1063,7 +1129,7 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
           }
           break;
         }
-      case EXTENSION:
+      case T_EXTENSION:
         {
           // PTH("cmdLen = ", cmdLen);
           if (newCmd[0] == '?')
@@ -1112,15 +1178,12 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
                     cameraReactionQ = false;
                 }
 
-                if (cameraPrintQ && cameraTaskActiveQ) {
+                if (cameraPrintQ == 1 && cameraTaskActiveQ) {
                   printToAllPorts('=');
                   showRecognitionResult(xCoord, yCoord, width, height);
-                  PTL();
+                  //PTL();
                   // printToAllPorts(token);
-                  if (cameraPrintQ == 1)
-                    cameraPrintQ = 0;  // if the command is XCp, the camera will print the result only once
-                  // else
-                  //   FPS();
+                  cameraPrintQ = 0;  // if the command is XCp, the camera will print the result only once
                 }
 
                 break;
@@ -1142,10 +1205,14 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
                 }
 
                 if (gesturePrintQ == 1) {
-                  int readGesture = read_gesture();
+                  // 在返回手势值之前，先调用 read_gesture() 更新手势值
+                  // 这对于WiFi模式尤其重要，因为 read_gesture() 是异步执行的
+                  // 如果不先更新，可能会返回旧的或已清除的手势值
+                  read_gesture();
                   printToAllPorts('=');
-                  if (readGesture != GESTURE_NONE)
-                    printToAllPorts(readGesture);
+                  printToAllPorts(gestureGetValue);
+                  lastGesture = gestureGetValue;
+                  gestureGetValue=GESTURE_NONE;
                   gesturePrintQ = 0;  // if the command is XGp, the gesture will print the detected result only once
                 }
                 break;
@@ -1351,6 +1418,9 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
         }
       case T_SKILL:
         {
+          // Queue-loaded skill steps must not clear defer; otherwise time-based gait replays clear defer before "up".
+          if (!skillCmdFromTaskQueue)
+            deferSkillTokenEcho = false;
           // Parse skill command and arguments
           char skillName[CMD_LEN + 1];
           char *spacePos = strchr(newCmd, ' ');
@@ -1366,14 +1436,15 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
             timeOrAngle = atoi(spacePos + 1);
           } else {
             // No arguments, use the full command as skill name
-            strcpy(skillName, newCmd);
+            // Use strncpy with bounds checking to prevent buffer overflow
+            strncpy(skillName, newCmd, CMD_LEN);
+            skillName[CMD_LEN] = '\0';  // Ensure null termination
           }
           
           if (!strcmp("x", skillName)        // x for random skill
               || strcmp(lastCmd, skillName)  // won't transform for the same gait.
-              || skill->period <= 1) {    // skill->period can be NULL!
-            // it's better to compare skill->skillName and newCmd.
-            // but need more logics for non skill cmd in between
+              || skill->period <= 1          // skill->period can be NULL!
+              || (spacePos != NULL && timeOrAngle > 0)) {
             if (!strcmp(skillName, "bk"))
               strcpy(skillName, "bkF");
             
@@ -1385,14 +1456,28 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
               char lastChar = skillName[strlen(skillName) - 1];
               
               if (lastChar == 'F') {
-                // Straight gait - add task with timing
-                char taskCmd[CMD_LEN + 1];
-                sprintf(taskCmd, "%s", skillName);
-                tQueue->addTask('k', taskCmd, timeOrAngle);
-                tQueue->addTask('k', "up");
-                PTH("Added straight gait task: ", taskCmd);
-                PTHL(" with time: ", timeOrAngle);
+                // Straight gait - handle cycle-based or time-based control
+                if (timeOrAngle < 200) {
+                  // Cycle-based control: count gait cycles directly
+                  cycleCountingMode = true;
+                  targetCycles = timeOrAngle;
+                  completedCycles = 0;
+                  PTH("Cycle counting mode: ", targetCycles);
+                  PTHL(" cycles, Period: ", skill->period);
+                } else {
+                  // Time-based control: use task queue with timing
+                  cycleCountingMode = false;
+                  // Use skillName directly instead of copying to avoid stack allocation
+                  // skillName is already a local variable, safe to use
+                  tQueue->addTask('k', skillName, timeOrAngle);
+                  tQueue->addTask('k', "up");
+                  PTH("Time-based mode: ", skillName);
+                  PTH(" for ", timeOrAngle);
+                  PTL(" ms");
+                }
+                deferSkillTokenEcho = true;
               } else if (lastChar == 'L' || lastChar == 'R') {
+#ifdef GYRO_PIN
                 // Turning gait - set up turning control
                 // Note: wkR should turn counterclockwise (negative yaw), wkL should turn clockwise (positive yaw)
                 // This matches polar coordinate convention where positive angle is counterclockwise
@@ -1408,6 +1493,24 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
                 PTHL(" initial yaw: ", initialYawAngle);
                 PTHL(" target angle: ", targetYawAngle);
                 PTHL(" turning direction: ", lastChar == 'R' ? "RIGHT (CCW)" : "LEFT (CW)");
+#else
+                // No IMU: cannot close loop on yaw; use the same cycle/time control as straight gaits.
+                if (timeOrAngle < 200) {
+                  cycleCountingMode = true;
+                  targetCycles = timeOrAngle;
+                  completedCycles = 0;
+                  PTH("Cycle counting mode (turn, no gyro): ", targetCycles);
+                  PTHL(" cycles, Period: ", skill->period);
+                } else {
+                  cycleCountingMode = false;
+                  tQueue->addTask('k', skillName, timeOrAngle);
+                  tQueue->addTask('k', "up");
+                  PTH("Time-based mode (turn, no gyro): ", skillName);
+                  PTH(" for ", timeOrAngle);
+                  PTL(" ms");
+                }
+#endif
+                deferSkillTokenEcho = true;
               }
             }
             // if (skill->period > 0)
@@ -1435,24 +1538,34 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
         }
     }
 
-    if (token == T_SKILL && newCmd[0] != '\0') {
+    if (lowerToken == T_SKILL && newCmd[0] != '\0') {// T_SKILL_DATA sets newCmd="tmp"; must update lastCmd so next "kup" triggers reload
       // if (skill->period > 0)
-      strcpy(lastCmd, newCmd);
+      // Use strncpy with bounds checking to prevent buffer overflow
+      strncpy(lastCmd, newCmd, CMD_LEN);
+      lastCmd[CMD_LEN] = '\0';  // Ensure null termination
       // else
       //   strcpy(lastCmd, "up");
     }
 
+    bool queueCompletesParameterizedGait =
+        deferSkillTokenEcho && skillCmdFromTaskQueue && token == T_SKILL && !strcmp(newCmd, "up");
+    if (queueCompletesParameterizedGait)
+      deferSkillTokenEcho = false;
+
     if (token != T_SKILL || skill->period > 0) {  // it will change the token and affect strcpy(lastCmd, newCmd)
-      printToAllPorts(token);                     // postures, gaits and other tokens can confirm completion by sending the token back
-      if (lastToken == T_SKILL
-          && (lowerToken == T_GYRO || lowerToken == T_INDEXED_SIMULTANEOUS_ASC || lowerToken == T_INDEXED_SEQUENTIAL_ASC
-              || lowerToken == T_PAUSE || token == T_JOINTS || token == T_RANDOM_MIND || token == T_BALANCE_SLOPE
-              || token == T_ACCELERATE || token == T_DECELERATE || token == T_TILT))
-        token = T_SKILL;
-    }
+      if (!deferSkillTokenEcho || queueCompletesParameterizedGait) {
+        printToAllPorts(token);                     // postures, gaits and other tokens can confirm completion by sending the token back
+        if (lastToken == T_SKILL
+            && (lowerToken == T_GYRO || lowerToken == T_INDEXED_SIMULTANEOUS_ASC || lowerToken == T_INDEXED_SEQUENTIAL_ASC
+                || lowerToken == T_PAUSE || token == T_JOINTS || token == T_RANDOM_MIND || token == T_BALANCE_SLOPE
+                || token == T_ACCELERATE || token == T_DECELERATE || token == T_TILT))
+          token = T_SKILL;
 #ifdef WEB_SERVER
-    finishWebCommand();
+        // Notify Web completion when token is echoed here; one-shot behaviors echo 'k' later (see below).
+        finishWebCommand();
 #endif
+      }
+    }
     resetCmd();
 #ifdef PWM_LED_PIN
     if (autoLedQ)
@@ -1494,6 +1607,10 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
       for (int i = 0; i < DOF; i++)
         currentAdjust[i] = 0;
       printToAllPorts(token);  // behavior can confirm completion by sending the token back
+#ifdef WEB_SERVER
+      // one-shot 技能在此处才打印 'k'，在此之后通知 Web 任务完成，使 WiFi 端在收到 token "k" 时才开始延时
+      finishWebCommand();
+#endif
 #ifdef GYRO_PIN
       if (xyzReal[2] > 0 && (fabs(ypr[1]) > 45 || fabs(ypr[2]) > 45)) {  // wait for imu to update
         while (fabs(ypr[1]) > 10 || fabs(ypr[2]) > 10) {
@@ -1515,6 +1632,7 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
     //   tQueue->lastTask = NULL;
     //   PTL(newCmd);
     // }
+    // PTHL("Exiting T_SKILL, token=", token);
   }
 
   // The code from here to the end of reaction() will conditionally run every time loop() in OpenCatEsp32.ino runs
@@ -1532,24 +1650,33 @@ void reaction() {  // Reminder:  reaction() is repeatedly called in the "forever
   } else if (readFeedbackQ)  // Conditionally read servo feedback and print servo angles
     servoFeedback(measureServoPin);
   // }
-  else
+  //else
 #ifdef GESTURE
     if (gesturePrintQ == 2) {
-    if (gestureGetValue != GESTURE_NONE)
-      printToAllPorts(gestureGetValue);
+      if (gestureGetValue != GESTURE_NONE) {
+        printToAllPorts(gestureGetValue);
+        lastGesture = gestureGetValue;
+        gestureGetValue = GESTURE_NONE;
+      }
+      // if (gestureGetValue != GESTURE_NONE || lastGesture != GESTURE_NONE) {
+      //   printToAllPorts(gestureGetValue);
+      //   lastGesture = gestureGetValue;
+      //   gestureGetValue = GESTURE_NONE;
+      // }
   }
 #endif
 #ifdef CAMERA
-  if (cameraPrintQ == 2)
-  {
-    showRecognitionResult(xCoord, yCoord, width, height);
-    PTL();
-    FPS();
+  if (cameraPrintQ == 2 && cameraTaskActiveQ) {
+    if (xCoord != lastXcoord || yCoord != lastYcoord)
+    {
+      showRecognitionResult(xCoord, yCoord, width, height);
 #ifdef WEB_SERVER
-    sendCameraData(xCoord, yCoord, width, height); // 发送摄像头数据到WebSocket客户端
+      sendCameraData(xCoord, yCoord, width, height); // Send camera data to WebSocket client
 #endif
-  }
-  else if (!cameraTaskActiveQ)
+      lastXcoord = xCoord;
+      lastYcoord = yCoord;
+    }
+  } else if (!cameraTaskActiveQ)
 #endif
   {
     delay(1);  // avoid triggering WDT

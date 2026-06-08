@@ -74,6 +74,7 @@ public:
     return this->size() == 0 && long(millis() - taskTimer) > taskInterval;
   }
   void loadTaskInfo(Task *t) {
+    skillCmdFromTaskQueue = true;
     token = t->tkn;
     cmdLen = t->paraLength;
     taskInterval = t->dly;

@@ -110,27 +110,45 @@ function webRequest(command, timeout = TIMEOUT_CONFIG.WEB_REQUEST.DEFAULT_TIMEOU
           return;
         }
         
-        // 如果showSentCommands开关激活，打印发送的命令
+        // 如果showSentCommands开关激活，在Console Log中显示发送的命令（异步执行，避免 DOM 操作阻塞）
         if (typeof showSentCommands !== 'undefined' && showSentCommands) {
-          // 使用displayCommand参数或默认处理
-          let commandToDisplay = displayCommand || command;
-          if (!displayCommand && command.startsWith("b64:")) {
-            try {
-              const decoded = decodeCommand(command);
-              if (decoded && decoded.token && decoded.params) {
-                commandToDisplay = `${decoded.token} ${decoded.params.join(" ")}`;
+          // 调用logSentCommand显示在Console Log中（如果该函数存在）
+          if (typeof logSentCommand === 'function') {
+            setTimeout(() => { try { logSentCommand(command); } catch (e) {} }, 0);
+          } else {
+            // 回退到console.log（兼容旧版本）
+            let commandToDisplay = displayCommand || command;
+            if (!displayCommand && command.startsWith("b64:")) {
+              try {
+                const decoded = decodeCommand(command);
+                if (decoded && decoded.token && decoded.params) {
+                  commandToDisplay = `${decoded.token} ${decoded.params.join(" ")}`;
+                }
+              } catch (error) {
+                // 如果解码失败，保持原命令
+                commandToDisplay = command;
               }
-            } catch (error) {
-              // 如果解码失败，保持原命令
-              commandToDisplay = command;
             }
+            console.log(getText("sendingCommand") + commandToDisplay);
           }
-          console.log(getText("sendingCommand") + commandToDisplay);
         }
         
         let result = await window.client.sendCommand(command, timeout);
+        
         if (Array.isArray(result) && result.length == 1) {
           result = result[0];
+        }
+        
+        // 在Console Log中显示响应（异步执行，避免 DOM 操作阻塞 resolve，影响传感器轮询实时性）
+        // XGp 无手势(-1) 时不记录，避免大量 -1 轮询刷屏导致 DOM 积压、后续手势识别变慢
+        if (typeof showSentCommands !== 'undefined' && showSentCommands && typeof logCommandResponse === 'function') {
+          const isXGpNoGesture = command === 'XGp' && (
+            result === -1 || result === '-1' ||
+            (typeof result === 'string' && (result.trim() === '-1' || (result.match(/-?\d+/) && parseInt(result.match(/-?\d+/)[0], 10) === -1)))
+          );
+          if (!isXGpNoGesture) {
+            setTimeout(() => { try { logCommandResponse(result); } catch (e) {} }, 0);
+          }
         }
         
         // 根据 needResponse 参数决定是否返回结果
@@ -154,26 +172,45 @@ function webBatchRequest(commands, timeout = TIMEOUT_CONFIG.WEB_REQUEST.BATCH_RE
         return;
       }
       
-      // 如果showSentCommands开关激活，打印发送的命令
+      // 如果showSentCommands开关激活，在Console Log中显示发送的命令
       if (typeof showSentCommands !== 'undefined' && showSentCommands) {
-        // 解码base64命令并显示可读格式
-        const displayCommands = commands.map(cmd => {
-          if (cmd.startsWith("b64:")) {
-            try {
-              const decoded = decodeCommand(cmd);
-              if (decoded && decoded.token && decoded.params) {
-                return `${decoded.token} ${decoded.params.join(" ")}`;
+        // 调用logSentCommand显示在Console Log中（如果该函数存在）
+        if (typeof logSentCommand === 'function') {
+          // 对每个命令单独调用logSentCommand
+          commands.forEach(cmd => {
+            logSentCommand(cmd);
+          });
+        } else {
+          // 回退到console.log（兼容旧版本）
+          const displayCommands = commands.map(cmd => {
+            if (cmd.startsWith("b64:")) {
+              try {
+                const decoded = decodeCommand(cmd);
+                if (decoded && decoded.token && decoded.params) {
+                  return `${decoded.token} ${decoded.params.join(" ")}`;
+                }
+              } catch (error) {
+                // 如果解码失败，保持原命令
               }
-            } catch (error) {
-              // 如果解码失败，保持原命令
             }
-          }
-          return cmd;
-        });
-        console.log(getText("sendingCommand") + displayCommands.join(', '));
+            return cmd;
+          });
+          console.log(getText("sendingCommand") + displayCommands.join(', '));
+        }
       }
       
       const result = await window.client.sendCommand(commands, timeout);
+      
+      // 在Console Log中显示响应（如果showSentCommands开关激活）
+      if (typeof showSentCommands !== 'undefined' && showSentCommands && typeof logCommandResponse === 'function') {
+        // 对于批量命令，显示所有响应
+        if (Array.isArray(result)) {
+          result.forEach(res => logCommandResponse(res));
+        } else {
+          logCommandResponse(result);
+        }
+      }
+      
       resolve(needResponse ? result : true);
     } catch (error)
     {

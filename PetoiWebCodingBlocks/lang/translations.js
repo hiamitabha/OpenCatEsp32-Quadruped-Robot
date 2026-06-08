@@ -33,6 +33,7 @@ const TRANSLATIONS = {
     "serialOutput": "串口监视器",
     "serialInputPlaceholder": "输入要发送的内容",
     "wifiConfig": "WiFi配置",
+    "wifiConfigDescription": "请输入您的WiFi凭据以将机器人连接到您的网络。",
     "resetPrompt": "请在配置WiFi前按下RESET按钮",
     "ssidPlaceholder": "输入WiFi名称",
     "passwordPlaceholder": "输入WiFi密码",
@@ -157,6 +158,10 @@ const TRANSLATIONS = {
     "getSensorInput": "获取传感器 %1",
     "setDigitalOutput": "设置数字输出 引脚 %1 状态 %2",
     "setAnalogOutput": "设置模拟输出 引脚 %1 数值 %2",
+    "getInput": "获取 %1 输入 引脚 %2",
+    "setOutput": "设置 %1 输出 引脚 %2 数值 %3",
+    "inputTypeDigital": "数字",
+    "inputTypeAnalog": "模拟",
     "sendCustomCommand": "执行串口命令 %1 后延时 %2 秒",
     "consoleInput": "打印提示 \"%1\" 并获取输入",
     "consoleInputDefaultPrompt": "请输入:",
@@ -177,15 +182,15 @@ const TRANSLATIONS = {
     "jointRelativeAngleValue": "关节 %1 角度 %2 %3 度",
     "getJointAngle": "获取关节 %1 的角度",
     "getAllJointAngles": "获取所有关节角度",
-    "gait": "步态 %1",
-    "posture": "姿势 %1",
-    "acrobatic_moves": "杂技动作(小心使用) %1",
+    "gait": "执行步态 %1",
+    "posture": "执行姿势 %1",
+    "acrobatic_moves": "执行特技动作(⚠️高压力) %1",
     "localAction": "原地动作 %1",
     "highDifficultyAction": "高难度特技动作(小心使用) %1",
     "setMotorAngleWithDelay": "设置关节 %1 角度为 %2 后延时 %3 秒",
-    "gaitWithDelay": "步态 %1 后延时 %2 秒",
-    "postureWithDelay": "姿势 %1 后延时 %2 秒",
-    "acrobaticWithDelay": "杂技动作(小心使用) %1 后延时 %2 秒",
+    "gaitWithDelay": "执行步态 %1 后延时 %2 秒",
+    "postureWithDelay": "执行姿势 %1 后延时 %2 秒",
+    "acrobaticWithDelay": "执行特技动作(⚠️高压力) %1 后延时 %2 秒",
 
     // 积木文本 - 控制
     "delayMs": "延时 %1 秒",
@@ -200,6 +205,8 @@ const TRANSLATIONS = {
     // 积木文本 - 音乐
     "playNoteMessage": "播放音符 %1 持续 %2 拍",
     "playMelodyMessage": "播放旋律 %1\n后延时 %2 秒",
+    "playToneListMessage": "播放音调列表 %1 后延时 %2 秒",
+    "playToneListTooltip": "输入音调和时长列表，格式：音调,时长,音调,时长...",
 
     // 积木文本 - 数学
     "mathRandomMessage": "随机数 %1 到 %2 %3",
@@ -270,6 +277,8 @@ const TRANSLATIONS = {
     "asyncSendingCommand": "异步发送命令: ",
     "asyncReceivedResponse": "异步收到响应: ",
     "networkRequestError": "网络请求错误",
+    "generatedCodeSyntaxError": "生成代码语法错误",
+    "checkBlocksForSpecialChars": "请检查积木中是否有特殊字符（如 < 或引号）。",
     "programEndingRestCommand": "程序结束，自动发送休息指令...",
     "restCommandFailed": "发送休息指令失败: ",
 
@@ -306,9 +315,9 @@ const TRANSLATIONS = {
     "beatUnit": "拍",
 
     // Motion blocks UI text
-    "gaitLabel": "步态",
-    "postureLabel": "姿势",
-    "acrobaticMovesLabel": "杂技动作(小心使用)",
+    "gaitLabel": "执行步态",
+    "postureLabel": "执行姿势",
+    "acrobaticMovesLabel": "执行特技动作(⚠️高压力)",
 
     // Note names
     "noteRest": "休止符",
@@ -454,7 +463,92 @@ const TRANSLATIONS = {
     "blockRunError": "消息处理错误:",
     "enterFileName": "请输入文件名:",
     "actionSkillFile": "执行技能文件 %1 中的技能后延时 %2 秒",
-    "postureSayHi": "打招呼"
+    "postureSayHi": "打招呼",
+
+    // Serial connection status messages
+    "serialConnectedWaitingMakeConnection": "串口连接成功，等待makeConnection积木处理连接",
+    "programStartedStopExecutionFalse": "程序开始执行，stopExecution设置为false",
+    "usingSerialConnectionExecute": "使用串口连接执行程序",
+    "usingWebSocketConnectionExecute": "使用WebSocket连接执行程序",
+    "serialConnectedSkipWebSocket": "串口已连接，跳过WebSocket连接",
+    "getIPAddressViaSerial": "通过串口获取IP地址",
+    "keepSerialConnection": "保持串口连接",
+    "programExecutionCompletedResetState": "程序执行完成，重置状态",
+    "detectedSerialConnectionDirectExecute": "检测到串口连接，直接执行程序",
+    "bothConnectionsAvailableUsingSerial": "检测到串口和WebSocket连接，优先使用串口通信模式",
+    "getIPAddressViaSerialFailed": "通过串口获取IP地址失败",
+    "usingExistingIPAddress": "使用已有IP地址",
+    "serialDisconnectedTryWiFi": "串口连接已断开，尝试切换到WiFi连接",
+    "tryingWiFiConnection": "尝试使用WiFi连接",
+    "sendingCommandViaWiFi": "通过WiFi发送命令",
+    "sendingCommandViaSerial": "通过串口发送命令",
+    "serialSendError": "串口发送错误",
+    "serialSendFailedTryWiFi": "串口发送失败，尝试使用WiFi连接",
+    "wiFiConnectionAlsoFailed": "WiFi连接也失败",
+    "serialResponseTimeout": "串口响应超时",
+    "noNumericDataFound": "未找到数字数据",
+    "sendingCommand": "发送命令",
+    "webSocketSendError": "WebSocket发送错误",
+    "webSocketConnected": "WebSocket连接已建立",
+    "webSocketClosed": "WebSocket连接已关闭",
+    "programExecutionError": "程序执行错误",
+    "gettingIPAddressWaiting": "正在获取IP地址，等待完成...",
+    "ipAddressAcquisitionComplete": "IP地址获取完成",
+    "successfullyAcquiredIPAddress": "成功获取IP地址",
+    "serialBufferClearedKeepLatest": "串口缓冲区已清理，保留最新数据",
+    "quickConnectFailed": "Quick connect失败",
+    "wiFiConnectionFailed": "WiFi连接失败",
+    "byteArrayConvertedToBase64": "字节数组(转为base64)",
+    "serialAndWiFiBothUnavailable": "串口和WiFi连接都不可用",
+    "serialUnavailableNoValidIP": "串口连接不可用且没有有效的IP地址",
+    "webSocketConnectionUnavailable": "WebSocket连接不可用",
+    "programExecutionStoppedByUser": "程序执行被用户停止",
+    "tokenNotFound": "未找到Token",
+    "dataNotFound": "未找到Data",
+    
+    // Debug Info - Joint Angles (调试信息 - 关节角度)
+    "debugDetectedRelativeAngles": "检测到相对角度，需要查询当前关节角度...",
+    "debugCurrentMode": "当前模式:",
+    "debugSerialMode": "串口模式",
+    "debugWiFiMode": "WiFi模式",
+    "debugQueryJCommandRaw": "查询 j 命令原始返回:",
+    "debugParsedJointAngles": "解析后的关节角度数组:",
+    "debugSuccessGetJointAngles": "成功获取关节角度，数量:",
+    "debugParseAllJointsStart": "parseAllJointsResult 开始解析，原始数据类型:",
+    "debugParseAllJointsRawLength": "parseAllJointsResult 原始数据长度:",
+    "debugParseAllJointsSplitLines": "parseAllJointsResult 分割后的行数:",
+    "debugParseAllJointsLineContent": "parseAllJointsResult 每行内容:",
+    
+    // Debug Info - Wait for Joint Angles Response (调试信息 - 等待关节角度响应)
+    "debugWaitJointAnglesStart": "waitForJointAnglesResponse 开始等待，超时时间:",
+    "debugWaitJointAnglesTimeout": "等待关节角度响应超时",
+    "debugWaitJointAnglesFoundToken": "waitForJointAnglesResponse 找到结束标记 j，位置:",
+    "debugWaitJointAnglesRelatedLines": "waitForJointAnglesResponse 相关行内容:",
+    "debugRecognizedNewFormat": "识别为新格式（包含=标记）",
+    "debugRecognizedOldFormat": "识别为旧格式或其他格式",
+    "debugNewFormatResponseLength": "新格式完整响应长度:",
+    "debugOldFormatResponseLength": "旧格式完整响应长度:",
+    "debugClearBufferKeepAfterJ": "清空缓冲区，保留 j 标记后的数据，剩余长度:",
+    "debugClearBufferBackupPlan": "清空缓冲区（备用方案），剩余长度:",
+    "debugClearEntireBuffer": "清空整个缓冲区",
+    "debugJointAnglesResponseComplete": "关节角度响应接收完成:",
+    "debugJointAnglesResponseSuccess": "成功",
+    "debugJointAnglesResponseFailed": "失败",
+    "debugWaitJointAnglesError": "等待关节角度响应时出错:",
+    
+    // Debug Info - WiFi Dialog (调试信息 - WiFi对话框)
+    "debugWiFiDialogAlreadyShown": "WiFi配置对话框已在本次会话中显示过，跳过显示",
+    
+    // Debug Info - REST Command (调试信息 - REST命令)
+    "debugRestCommandSent": "Rest命令发送成功",
+    
+    // Debug Info - Additional Messages (调试信息 - 其他消息)
+    "debugDetectedJCommand": "检测到 j 命令，开始等待关节角度响应...",
+    "debugConnectionFailed": "连接失败，后续操作可能无法正常执行",
+    "debugConnectionError": "连接错误:",
+    "debugCannotGetJointAngles": "无法获取当前关节角度，使用默认值(0)。相对角度可能不准确。",
+    "debugUseDefaultJointAngles": "使用默认关节角度值(0)",
+    "debugToneListSendFailed": "音调列表发送失败:"
   },
 
   en: {
@@ -491,6 +585,7 @@ const TRANSLATIONS = {
     "serialOutput": "Serial Monitor",
     "serialInputPlaceholder": "Enter content to send",
     "wifiConfig": "WiFi Configuration",
+    "wifiConfigDescription": "Please enter your WiFi credentials to connect the robot to your network.",
     "resetPrompt": "Please press RESET button before configuring WiFi",
     "ssidPlaceholder": "Enter WiFi SSID",
     "passwordPlaceholder": "Enter WiFi Password",
@@ -615,6 +710,10 @@ const TRANSLATIONS = {
     "getSensorInput": "Get Sensor %1",
     "setDigitalOutput": "Set Digital Output Pin %1 State %2",
     "setAnalogOutput": "Set Analog Output Pin %1 Value %2",
+    "getInput": "Get %1 Input Pin %2",
+    "setOutput": "Set %1 Output Pin %2 Value %3",
+    "inputTypeDigital": "Digital",
+    "inputTypeAnalog": "Analog",
     "sendCustomCommand": "Send Serial Command %1 then delay %2 sec",
     "consoleInput": "Print prompt \"%1\" and get input",
     "consoleInputDefaultPrompt": "Please input:",
@@ -635,15 +734,15 @@ const TRANSLATIONS = {
     "jointRelativeAngleValue": "Joint %1 angle %2 %3 degrees",
     "getJointAngle": "Get Joint %1 Angle",
     "getAllJointAngles": "Get All Joint Angles",
-    "gait": "Gait %1",
-    "posture": "Posture %1",
-    "acrobatic_moves": "Acrobatic Moves (Use with Caution) %1",
+    "gait": "Execute Walking %1",
+    "posture": "Execute Posture %1",
+    "acrobatic_moves": "Execute special moves (⚠️high stress) %1",
     "localAction": "Static Action %1",
     "highDifficultyAction": "High Difficulty Action (Use with Caution) %1",
     "setMotorAngleWithDelay": "Set Joint %1 Angle to %2 then delay %3 sec",
-    "gaitWithDelay": "Gait %1 then delay %2 sec",
-    "postureWithDelay": "Posture %1 then delay %2 sec",
-    "acrobaticWithDelay": "Acrobatic Moves (Use with Caution) %1 then delay %2 sec",
+    "gaitWithDelay": "Execute Walking %1 then delay %2 sec",
+    "postureWithDelay": "Execute Posture %1 then delay %2 sec",
+    "acrobaticWithDelay": "Execute special moves (⚠️high stress) %1 then delay %2 sec",
 
     // Block text - Control
     "delayMs": "Delay %1 seconds",
@@ -658,6 +757,8 @@ const TRANSLATIONS = {
     // Block text - Music
     "playNoteMessage": "Play note %1 for %2 beat",
     "playMelodyMessage": "Play Melody %1\nthen delay %2 sec",
+    "playToneListMessage": "Play tone list %1 then delay %2 sec",
+    "playToneListTooltip": "Enter tone and duration list, format: tone,duration,tone,duration...",
 
     // Block text - Math
     "mathRandomMessage": "pick random %1 to %2 %3",
@@ -728,6 +829,8 @@ const TRANSLATIONS = {
     "asyncSendingCommand": "Async sending command: ",
     "asyncReceivedResponse": "Async received response: ",
     "networkRequestError": "Network request error",
+    "generatedCodeSyntaxError": "Generated code syntax error",
+    "checkBlocksForSpecialChars": "Check blocks for special characters (e.g. < or quotes).",
     "programEndingRestCommand": "Program ended, sending rest command...",
     "restCommandFailed": "Failed to send rest command: ",
 
@@ -764,9 +867,9 @@ const TRANSLATIONS = {
     "beatUnit": "beat",
 
     // Motion blocks UI text
-    "gaitLabel": "Gait",
-    "postureLabel": "Posture",
-    "acrobaticMovesLabel": "Acrobatic Moves (Use with Caution)",
+    "gaitLabel": "Execute Walking",
+    "postureLabel": "Execute Posture",
+    "acrobaticMovesLabel": "Execute special moves (⚠️high stress)",
 
     // Note names
     "noteRest": "Rest",
@@ -911,7 +1014,92 @@ const TRANSLATIONS = {
     "blockRunError": "Message processing error:",
     "enterFileName": "Please enter filename:",
     "actionSkillFile": "Execute skill file %1 after delay %2 seconds",
-    "postureSayHi": "Hi"
+    "postureSayHi": "Hi",
+
+    // Serial connection status messages
+    "serialConnectedWaitingMakeConnection": "Serial connection successful, waiting for makeConnection block to handle connection",
+    "programStartedStopExecutionFalse": "Program execution started, stopExecution set to false",
+    "usingSerialConnectionExecute": "Using serial connection to execute program",
+    "usingWebSocketConnectionExecute": "Using WebSocket connection to execute program",
+    "serialConnectedSkipWebSocket": "Serial connected, skipping WebSocket connection",
+    "getIPAddressViaSerial": "Getting IP address via serial",
+    "keepSerialConnection": "Keeping serial connection",
+    "programExecutionCompletedResetState": "Program execution completed, resetting state",
+    "detectedSerialConnectionDirectExecute": "Detected serial connection, executing program directly",
+    "bothConnectionsAvailableUsingSerial": "Both serial and WebSocket connections available, prioritizing serial communication mode",
+    "getIPAddressViaSerialFailed": "Failed to get IP address via serial",
+    "usingExistingIPAddress": "Using existing IP address",
+    "serialDisconnectedTryWiFi": "Serial connection disconnected, trying to switch to WiFi connection",
+    "tryingWiFiConnection": "Trying WiFi connection",
+    "sendingCommandViaWiFi": "Sending command via WiFi",
+    "sendingCommandViaSerial": "Sending command via serial",
+    "serialSendError": "Serial send error",
+    "serialSendFailedTryWiFi": "Serial send failed, trying WiFi connection",
+    "wiFiConnectionAlsoFailed": "WiFi connection also failed",
+    "serialResponseTimeout": "Serial response timeout",
+    "noNumericDataFound": "No numeric data found",
+    "sendingCommand": "Sending command",
+    "webSocketSendError": "WebSocket send error",
+    "webSocketConnected": "WebSocket connection established",
+    "webSocketClosed": "WebSocket connection closed",
+    "programExecutionError": "Program execution error",
+    "gettingIPAddressWaiting": "Getting IP address, waiting for completion...",
+    "ipAddressAcquisitionComplete": "IP address acquisition complete",
+    "successfullyAcquiredIPAddress": "Successfully acquired IP address",
+    "serialBufferClearedKeepLatest": "Serial buffer cleared, keeping latest data",
+    "quickConnectFailed": "Quick connect failed",
+    "wiFiConnectionFailed": "WiFi connection failed",
+    "byteArrayConvertedToBase64": "Byte array (converted to base64)",
+    "serialAndWiFiBothUnavailable": "Both serial and WiFi connections are unavailable",
+    "serialUnavailableNoValidIP": "Serial connection unavailable and no valid IP address",
+    "webSocketConnectionUnavailable": "WebSocket connection unavailable",
+    "programExecutionStoppedByUser": "Program execution stopped by user",
+    "tokenNotFound": "Token not found",
+    "dataNotFound": "Data not found",
+    
+    // Debug Info - Joint Angles
+    "debugDetectedRelativeAngles": "Detected relative angles, need to query current joint angles...",
+    "debugCurrentMode": "Current mode:",
+    "debugSerialMode": "Serial mode",
+    "debugWiFiMode": "WiFi mode",
+    "debugQueryJCommandRaw": "Query j command raw return:",
+    "debugParsedJointAngles": "Parsed joint angles array:",
+    "debugSuccessGetJointAngles": "Successfully got joint angles, count:",
+    "debugParseAllJointsStart": "parseAllJointsResult starts parsing, raw data type:",
+    "debugParseAllJointsRawLength": "parseAllJointsResult raw data length:",
+    "debugParseAllJointsSplitLines": "parseAllJointsResult number of lines after split:",
+    "debugParseAllJointsLineContent": "parseAllJointsResult line content:",
+    
+    // Debug Info - Wait for Joint Angles Response
+    "debugWaitJointAnglesStart": "waitForJointAnglesResponse started waiting, timeout:",
+    "debugWaitJointAnglesTimeout": "Waiting for joint angles response timeout",
+    "debugWaitJointAnglesFoundToken": "waitForJointAnglesResponse found end token j, position:",
+    "debugWaitJointAnglesRelatedLines": "waitForJointAnglesResponse related line content:",
+    "debugRecognizedNewFormat": "Recognized as new format (with = marker)",
+    "debugRecognizedOldFormat": "Recognized as old format or other format",
+    "debugNewFormatResponseLength": "New format full response length:",
+    "debugOldFormatResponseLength": "Old format full response length:",
+    "debugClearBufferKeepAfterJ": "Clear buffer, keep data after j marker, remaining length:",
+    "debugClearBufferBackupPlan": "Clear buffer (backup plan), remaining length:",
+    "debugClearEntireBuffer": "Clear entire buffer",
+    "debugJointAnglesResponseComplete": "Joint angles response reception complete:",
+    "debugJointAnglesResponseSuccess": "Success",
+    "debugJointAnglesResponseFailed": "Failed",
+    "debugWaitJointAnglesError": "Error waiting for joint angles response:",
+    
+    // Debug Info - WiFi Dialog
+    "debugWiFiDialogAlreadyShown": "WiFi configuration dialog has already been shown in this session, skipping",
+    
+    // Debug Info - REST Command
+    "debugRestCommandSent": "Rest command sent successfully",
+    
+    // Debug Info - Additional Messages
+    "debugDetectedJCommand": "Detected j command, waiting for joint angles response...",
+    "debugConnectionFailed": "Connection failed, subsequent operations may not work properly",
+    "debugConnectionError": "Connection error:",
+    "debugCannotGetJointAngles": "Cannot get current joint angles, using default value (0). Relative angles may be inaccurate.",
+    "debugUseDefaultJointAngles": "Using default joint angles value (0)",
+    "debugToneListSendFailed": "Tone list send failed:"
   },
 
   ja: {
@@ -948,6 +1136,7 @@ const TRANSLATIONS = {
     "serialOutput": "シリアルモニター",
     "serialInputPlaceholder": "送信する内容を入力",
     "wifiConfig": "WiFi設定",
+    "wifiConfigDescription": "ロボットをネットワークに接続するために、WiFi認証情報を入力してください。",
     "resetPrompt": "WiFiを設定する前にRESETボタンを押してください",
     "ssidPlaceholder": "WiFi名を入力",
     "passwordPlaceholder": "WiFiパスワードを入力",
@@ -1079,6 +1268,10 @@ const TRANSLATIONS = {
     "getSensorInput": "センサーを取得 %1",
     "setDigitalOutput": "デジタル出力ピン %1 状態 %2 を設定",
     "setAnalogOutput": "アナログ出力ピン %1 値 %2 を設定",
+    "getInput": "%1 入力を取得 ピン %2",
+    "setOutput": "%1 出力を設定 ピン %2 値 %3",
+    "inputTypeDigital": "デジタル",
+    "inputTypeAnalog": "アナログ",
     "sendCustomCommand": "カスタムコマンドを送信 %1 の後 %2 秒待機",
     "consoleInput": "プロンプト \"%1\" を表示して入力を取得",
     "consoleInputDefaultPrompt": "入力してください:",
@@ -1099,15 +1292,15 @@ const TRANSLATIONS = {
     "jointRelativeAngleValue": "関節 %1 の角度 %2 %3度",
     "getJointAngle": "関節 %1 の角度を取得",
     "getAllJointAngles": "すべての関節角度を取得",
-    "gait": "歩行パターン %1",
-    "posture": "姿勢 %1",
-    "acrobatic_moves": "アクロバティック動作（注意して使用） %1",
+    "gait": "歩行を実行 %1",
+    "posture": "姿勢を実行 %1",
+    "acrobatic_moves": "特別な動きを実行（⚠️高負荷） %1",
     "localAction": "静的アクション %1",
     "highDifficultyAction": "高難度アクション（注意して使用） %1",
     "setMotorAngleWithDelay": "関節 %1 の角度を %2 に設定し %3 秒待機",
-    "gaitWithDelay": "歩行パターン %1 の後 %2 秒待機",
-    "postureWithDelay": "姿勢 %1 の後 %2 秒待機",
-    "acrobaticWithDelay": "アクロバティック動作（注意して使用）%1 の後 %2 秒待機",
+    "gaitWithDelay": "歩行を実行 %1 の後 %2 秒待機",
+    "postureWithDelay": "姿勢を実行 %1 の後 %2 秒待機",
+    "acrobaticWithDelay": "特別な動きを実行（⚠️高負荷） %1 の後 %2 秒待機",
 
     // ブロックテキスト - 制御
     "delayMs": "%1 秒待機",
@@ -1122,6 +1315,8 @@ const TRANSLATIONS = {
     // ブロックテキスト - 音楽
     "playNoteMessage": "音符 %1 を %2 拍子分再生",
     "playMelodyMessage": "メロディー %1 を再生\n後 %2 秒待機",
+    "playToneListMessage": "音調リスト %1 を再生し %2 秒待機",
+    "playToneListTooltip": "音調と時長リストを入力、形式：音調,時長,音調,時長...",
 
     // アクションオプション
     "stand": "立つ",
@@ -1186,6 +1381,8 @@ const TRANSLATIONS = {
     "asyncSendingCommand": "非同期コマンド送信中: ",
     "asyncReceivedResponse": "非同期レスポンス受信: ",
     "networkRequestError": "ネットワークリクエストエラー",
+    "generatedCodeSyntaxError": "生成コードの構文エラー",
+    "checkBlocksForSpecialChars": "ブロックに特殊文字（< や引用符など）が含まれていないか確認してください。",
     "programEndingRestCommand": "プログラム終了、休息コマンドを送信中...",
     "restCommandFailed": "休息コマンドの送信に失敗しました: ",
 
@@ -1222,9 +1419,9 @@ const TRANSLATIONS = {
     "beatUnit": "拍",
 
     // モーションブロックUIテキスト
-    "gaitLabel": "歩行パターン",
-    "postureLabel": "姿勢",
-    "acrobaticMovesLabel": "アクロバティック動作（注意して使用）",
+    "gaitLabel": "歩行を実行",
+    "postureLabel": "姿勢を実行",
+    "acrobaticMovesLabel": "特別な動きを実行（⚠️高負荷）",
 
     // 音符名
     "noteRest": "休符",
@@ -1368,7 +1565,92 @@ const TRANSLATIONS = {
     "blockRunError": "メッセージ処理エラー:",
     "enterFileName": "ファイル名を入力してください:",
     "actionSkillFile": "技能ファイル %1 の後 %2 秒待機",
-    "postureSayHi": "打招呼"
+    "postureSayHi": "打招呼",
+
+    // Serial connection status messages
+    "serialConnectedWaitingMakeConnection": "シリアル接続成功、makeConnectionブロックでの接続処理を待機中",
+    "programStartedStopExecutionFalse": "プログラム実行開始、stopExecutionをfalseに設定",
+    "usingSerialConnectionExecute": "シリアル接続を使用してプログラム実行",
+    "usingWebSocketConnectionExecute": "WebSocket接続を使用してプログラム実行",
+    "serialConnectedSkipWebSocket": "シリアル接続済み、WebSocket接続をスキップ",
+    "getIPAddressViaSerial": "シリアル経由でIPアドレスを取得",
+    "keepSerialConnection": "シリアル接続を維持",
+    "programExecutionCompletedResetState": "プログラム実行完了、状態をリセット",
+    "detectedSerialConnectionDirectExecute": "シリアル接続を検出、プログラムを直接実行",
+    "bothConnectionsAvailableUsingSerial": "シリアルとWebSocket接続の両方が利用可能、シリアル通信モードを優先",
+    "getIPAddressViaSerialFailed": "シリアル経由でのIPアドレス取得に失敗",
+    "usingExistingIPAddress": "既存のIPアドレスを使用",
+    "serialDisconnectedTryWiFi": "シリアル接続が切断されました、WiFi接続に切り替えます",
+    "tryingWiFiConnection": "WiFi接続を試行中",
+    "sendingCommandViaWiFi": "WiFi経由でコマンドを送信",
+    "sendingCommandViaSerial": "シリアル経由でコマンドを送信",
+    "serialSendError": "シリアル送信エラー",
+    "serialSendFailedTryWiFi": "シリアル送信失敗、WiFi接続を試行",
+    "wiFiConnectionAlsoFailed": "WiFi接続も失敗",
+    "serialResponseTimeout": "シリアル応答タイムアウト",
+    "noNumericDataFound": "数値データが見つかりません",
+    "sendingCommand": "コマンド送信中",
+    "webSocketSendError": "WebSocket送信エラー",
+    "webSocketConnected": "WebSocket接続が確立されました",
+    "webSocketClosed": "WebSocket接続が閉じられました",
+    "programExecutionError": "プログラム実行エラー",
+    "gettingIPAddressWaiting": "IPアドレス取得中、完了を待機中...",
+    "ipAddressAcquisitionComplete": "IPアドレス取得完了",
+    "successfullyAcquiredIPAddress": "IPアドレスの取得に成功",
+    "serialBufferClearedKeepLatest": "シリアルバッファをクリア、最新データを保持",
+    "quickConnectFailed": "クイック接続失敗",
+    "wiFiConnectionFailed": "WiFi接続失敗",
+    "byteArrayConvertedToBase64": "バイト配列（Base64に変換）",
+    "serialAndWiFiBothUnavailable": "シリアルとWiFi接続の両方が利用できません",
+    "serialUnavailableNoValidIP": "シリアル接続が利用できず、有効なIPアドレスもありません",
+    "webSocketConnectionUnavailable": "WebSocket接続が利用できません",
+    "programExecutionStoppedByUser": "プログラム実行がユーザーによって停止されました",
+    "tokenNotFound": "トークンが見つかりません",
+    "dataNotFound": "データが見つかりません",
+    
+    // Debug Info - Joint Angles
+    "debugDetectedRelativeAngles": "相対角度が検出されました、現在の関節角度を取得する必要があります...",
+    "debugCurrentMode": "現在のモード:",
+    "debugSerialMode": "シリアルモード",
+    "debugWiFiMode": "WiFiモード",
+    "debugQueryJCommandRaw": "jコマンドの生の応答を照会:",
+    "debugParsedJointAngles": "解析された関節角度配列:",
+    "debugSuccessGetJointAngles": "関節角度の取得に成功、数:",
+    "debugParseAllJointsStart": "parseAllJointsResult 解析開始、生データ型:",
+    "debugParseAllJointsRawLength": "parseAllJointsResult 生データ長:",
+    "debugParseAllJointsSplitLines": "parseAllJointsResult 分割後の行数:",
+    "debugParseAllJointsLineContent": "parseAllJointsResult 行内容:",
+    
+    // Debug Info - Wait for Joint Angles Response
+    "debugWaitJointAnglesStart": "waitForJointAnglesResponse 待機開始、タイムアウト:",
+    "debugWaitJointAnglesTimeout": "関節角度応答の待機がタイムアウトしました",
+    "debugWaitJointAnglesFoundToken": "waitForJointAnglesResponse 終了トークンjを検出、位置:",
+    "debugWaitJointAnglesRelatedLines": "waitForJointAnglesResponse 関連行内容:",
+    "debugRecognizedNewFormat": "新しい形式として認識（=マーカー付き）",
+    "debugRecognizedOldFormat": "古い形式またはその他の形式として認識",
+    "debugNewFormatResponseLength": "新しい形式の完全な応答長:",
+    "debugOldFormatResponseLength": "古い形式の完全な応答長:",
+    "debugClearBufferKeepAfterJ": "バッファをクリア、jマーカー後のデータを保持、残り長さ:",
+    "debugClearBufferBackupPlan": "バッファをクリア（バックアッププラン）、残り長さ:",
+    "debugClearEntireBuffer": "バッファ全体をクリア",
+    "debugJointAnglesResponseComplete": "関節角度応答の受信完了:",
+    "debugJointAnglesResponseSuccess": "成功",
+    "debugJointAnglesResponseFailed": "失敗",
+    "debugWaitJointAnglesError": "関節角度応答の待機中にエラー:",
+    
+    // Debug Info - WiFi Dialog
+    "debugWiFiDialogAlreadyShown": "WiFi設定ダイアログは既にこのセッションで表示されています、スキップします",
+    
+    // Debug Info - REST Command
+    "debugRestCommandSent": "Restコマンドが正常に送信されました",
+    
+    // Debug Info - Additional Messages
+    "debugDetectedJCommand": "jコマンドを検出、関節角度の応答を待機中...",
+    "debugConnectionFailed": "接続に失敗しました、後続の操作が正常に実行できない可能性があります",
+    "debugConnectionError": "接続エラー:",
+    "debugCannotGetJointAngles": "現在の関節角度を取得できません、デフォルト値(0)を使用します。相対角度が不正確な可能性があります。",
+    "debugUseDefaultJointAngles": "デフォルトの関節角度値(0)を使用",
+    "debugToneListSendFailed": "トーンリストの送信に失敗:"
   }
 };
 

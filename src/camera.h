@@ -37,6 +37,13 @@ int lastXcoord = -1, lastYcoord = -1;
 int imgRangeX = 100;               // the frame size 0~100 on X and Y direction
 int imgRangeY = 100;
 
+extern TaskHandle_t TASK_imu;
+extern bool updateGyroQ;
+extern bool imuLockI2c;
+extern bool cameraLockI2c;
+extern bool gestureLockI2c;
+extern bool eepromLockI2c;
+
 // #ifdef BiBoard_V1_0
 // #define USE_WIRE1  // use the Grove UART as the Wire1, which is independent of Wire used by the main devices, such as
                    // the gyroscope and EEPROM.
@@ -160,18 +167,6 @@ bool cameraSetup() {
     return false;
   }
 
-  // Acquire camera I2C lock and wait for other I2C operations to complete
-#ifndef USE_WIRE1
-  cameraLockI2c = true;  // Signal that camera wants to use I2C bus
-  while (
-#ifdef GYRO_PIN
-      imuLockI2c ||  // wait for the imu to release lock
-#endif
-      gestureLockI2c ||  // wait for the gesture to release lock
-      eepromLockI2c)     // wait for the EEPROM operations to complete
-    delay(1);
-#endif
-
 #ifdef NYBBLE
   initPars = nybblePars;
   sizePars = sizeof(nybblePars) / sizeof(int8_t);
@@ -192,6 +187,18 @@ bool cameraSetup() {
     imgRangeY = 240;
   }
 #endif
+#endif
+    
+    // Acquire camera I2C lock and wait for other I2C operations to complete
+#ifndef USE_WIRE1
+    cameraLockI2c = true;  // Signal that camera wants to use I2C bus
+while (
+#ifdef GYRO_PIN
+    imuLockI2c ||  // wait for the imu to release lock
+#endif
+    gestureLockI2c ||  // wait for the gesture to release lock
+    eepromLockI2c)     // wait for the EEPROM operations to complete
+  delay(1);
 #endif
 
 #ifdef USE_WIRE1
@@ -224,14 +231,17 @@ bool cameraSetup() {
     sentry2CameraSetup();
   }
 #endif
+
+#ifdef SHOW_FPS
+  // used for FPS calculation
   fps = 0;
   loopTimer = millis();
-
-  // Release camera I2C lock
-#ifndef USE_WIRE1
-  cameraLockI2c = false;
 #endif
 
+//   Release camera I2C lock
+ #ifndef USE_WIRE1
+   cameraLockI2c = false;
+ #endif
   return cameraSetupSuccessful;
 }
 
@@ -247,7 +257,7 @@ void showRecognitionResult(int xCoord, int yCoord, int width, int height = -1) {
     printToAllPorts('\t', false);
     printToAllPorts(height, false);
   }
-  printToAllPorts('\t', false);
+  printToAllPorts('\t', true);
 }
 
 // #define WALK  //let the robot move its body to follow people rather than sitting at the original position
@@ -350,7 +360,11 @@ void cameraBehavior(int xCoord, int yCoord, int width) {
 int coords[3];
 
 void taskReadCamera(void *par) {
+  // PTHL("cameraTaskActiveQ = ", cameraTaskActiveQ);
   while (cameraTaskActiveQ) {
+    // PTHL("imuLockI2c = ", imuLockI2c);
+    // PTHL("gestureLockI2c = ", gestureLockI2c);
+    // PTHL("eepromLockI2c = ", eepromLockI2c);
 #ifndef USE_WIRE1
     while (
 #ifdef GYRO_PIN
@@ -361,11 +375,7 @@ void taskReadCamera(void *par) {
       delay(1);
     cameraLockI2c = true;
 #endif
-    if (xCoord != lastXcoord || yCoord != lastYcoord)
-    {
-      lastXcoord = xCoord;
-      lastYcoord = yCoord;
-    }
+
 #ifdef MU_CAMERA
     if (MuQ)
       read_MuCamera();
@@ -383,27 +393,36 @@ void taskReadCamera(void *par) {
       read_Sentry2Camera();
 #endif
     cameraLockI2c = false;
-    // vTaskDelay(1);
+
+    // for checking the size of unused stack space
+    // vTaskDelay(50 / portTICK_PERIOD_MS);  
+    // Serial.println("Stack high water mark: " + String(uxTaskGetStackHighWaterMark(NULL)) + " bytes");
   }
   vTaskDelete(NULL);
 }
 
 void read_camera() {
   if (!cameraTaskActiveQ) {
+    // Serial.print("Free heap: ");
+    // Serial.println(ESP.getFreeHeap());
     PTLF("Create Camera Task...");
-    xTaskCreatePinnedToCore(taskReadCamera,  // task function
-                            "TaskReadCamera",  // name
-                            10000,  // task stack size​​
-                            NULL,  // parameters
-                            0,  // priority
-                            &TASK_HandleCamera,  // handle
-                            0);  // core
+    BaseType_t result = xTaskCreatePinnedToCore(
+      taskReadCamera,      // task function
+      "TaskReadCamera",    // task name
+      1800,                // task stack size​​
+      NULL,                // parameters
+      0,                   // priority
+      &TASK_HandleCamera,  // handle
+      0);                  // core
+    if (result == pdPASS) {
+      Serial.println("Camera task created successfully");
+    } else {
+      Serial.println("Failed to create camera task, error code: " + String(result));
+    }
     cameraTaskActiveQ = 1;
     PTLF("Camera task activated.");
   }
-  // long waitingTime = millis();
-  // while (!detectedObjectQ && millis() - waitingTime < 20)
-  //   delay(1); // wait for the camera to detect an object in another core
+
   if (detectedObjectQ) {
     cameraBehavior(xCoord, yCoord, width);
     detectedObjectQ = false;
@@ -670,22 +689,59 @@ enum OptResolution : uint8_t {
 void groveVisionSetup() {
   PTLF("Setup Grove Vision AI Module");
   // CAMERA_WIRE.begin(10, 9, 400000);
-
+  
   // End the TASK_imu task when activating Grove Vision AI V2
 #ifdef GYRO_PIN
-  // extern TaskHandle_t TASK_imu;
-  // extern bool updateGyroQ;
   if (TASK_imu != NULL) {
-    updateGyroQ = false;  // 直接设置运行标志来优雅地结束IMU任务
-    // 等待任务自然结束
-    while (eTaskGetState(TASK_imu) != eDeleted) {
-      delay(1);
-    }
-    TASK_imu = NULL;
-    PTLF("Terminated TASK_imu task gracefully");
+      while (eTaskGetState(TASK_imu) != eDeleted) {
+          PTHL("task state:", eTaskGetState(TASK_imu));
+          if(eTaskGetState(TASK_imu)== eReady){
+              TASK_imu = NULL;
+              break;
+          }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+      }
+    // PTHL("Initial task state:", eTaskGetState(TASK_imu));
+    // Ensure release all locks that may block IMU task
   }
 #endif
-  AI.begin(&CAMERA_WIRE);
+  // Adjust I2C clock frequency, reduce to improve stability
+  CAMERA_WIRE.setClock(100000); // Reduce to 100kHz, more stable than default 400kHz
+  
+  // Wait for a while before initializing AI module to ensure I2C bus stability
+  delay(500); // Increase delay to 500ms
+  
+  // Try AI module initialization
+  Serial.println("Initializing Grove Vision AI Module...");
+  bool aiInitSuccess = false;
+  
+  // Method 1: Try standard initialization
+  if (AI.begin(&CAMERA_WIRE)) {
+    aiInitSuccess = true;
+    Serial.println("Standard AI.begin() succeeded!");
+  } else {
+    Serial.println("Standard AI.begin() failed, using manual method...");
+    
+    // Method 2: Manual initialization (more reliable under Bluetooth interference)
+    AI.set_rx_buffer(8192);  // 8KB receive buffer
+    AI.set_tx_buffer(1024);  // 1KB transmit buffer
+    
+    // Manually set sensor parameters
+    uint8_t result = AI.setSensor(true, OPT_DETAIL_240 + OPT_ANGLE_90);
+    if (result == CMD_OK) {
+      aiInitSuccess = true;
+      Serial.println("Manual initialization succeeded!");
+    } else {
+      Serial.print("Manual initialization failed with code: 0x");
+      Serial.println(result, HEX);
+    }
+  }
+  
+  if (!aiInitSuccess) {
+    Serial.println("AI module initialization failed!");
+    Serial.println("Please check hardware connection and power supply");
+    return;
+  }
 
   uint8_t count = 0;
   bool sensorEnable = true;
@@ -706,6 +762,8 @@ void groveVisionSetup() {
 }
 
 void read_GroveVision() {
+  // PTHL("cameraSetupSuccessful = ", cameraSetupSuccessful);
+  // PTHL("AI.invoke() = ", AI.invoke());
   if (cameraSetupSuccessful && !AI.invoke()) {
     if (AI.boxes().size() >= 1) {
       updateCoordinateLock = true;
@@ -735,10 +793,12 @@ void read_GroveVision() {
           Serial.println(AI.boxes()[i].h);
         }
       }
+#ifdef SHOW_FPS
       if (cameraPrintQ == 2 && cameraTaskActiveQ) 
       {
         FPS();
-      }
+      } 
+#endif
     }
   }
 }

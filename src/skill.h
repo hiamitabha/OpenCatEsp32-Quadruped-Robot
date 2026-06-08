@@ -280,7 +280,7 @@ public:
     if (period < 0) {  // behaviors
       interruptedDuringBehavior = false;
       int8_t repeat = loopCycle[2] >= 0 && loopCycle[2] < 2 ? 0 : loopCycle[2] - 1;
-      bool gyroBalanceQlag = gyroBalanceQ;
+      gyroBalanceQlag = gyroBalanceQ;
       gyroBalanceQ = strcmp(skillName, "bf") && strcmp(skillName, "ff") && strcmp(skillName, "flipF") && strcmp(skillName, "flipD") && strcmp(skillName, "flipL") && strcmp(skillName, "flipR") && strcmp(skillName, "pd") && strcmp(skillName, "hds") && strcmp(skillName, "bx") && strstr(skillName, "rl") == NULL;  // won't read gyro for fast motion
       for (byte c = 0; c < abs(period); c++) {                                                                                                                                                                                                                                                                         // the last two in the row are transition speed and delay
         Stream *serialPort = NULL;
@@ -316,6 +316,7 @@ public:
           PTHL("imuException: ", imuException);
           PTLF("Behavior interrupted");
           interruptedDuringBehavior = true;
+          gyroBalanceQ = gyroBalanceQlag;  // Restore gyroBalanceQ before returning
           return;
         }
         // printToAllPorts("Progress: " + String(c + 1) + "/" + abs(period));
@@ -426,8 +427,25 @@ public:
         calibratedPWM(jointIndex, duty);
       }
       frame += tStep;
-      if (frame >= abs(period))
+      if (frame >= abs(period)) {
         frame = 0;
+        
+        // Check if in cycle counting mode and count completed cycles
+        if (cycleCountingMode && period > 1) {
+          completedCycles++;
+          PTH("Completed cycle: ", completedCycles);
+          PTHL(" / ", targetCycles);
+          
+          if (completedCycles >= targetCycles) {
+            // Target cycles reached, stop the gait
+            cycleCountingMode = false;
+            completedCycles = 0;
+            targetCycles = 0;
+            tQueue->addTask('k', "up");
+            PTLF("Cycle target reached, stopping gait");
+          }
+        }
+      }
     }
   }
 };

@@ -563,9 +563,11 @@ void resetIfVersionOlderThan(String versionStr) {
 #endif
   long currentDate = atol(versionStr.c_str() + versionStr.length() - 6);
   if (savedDate < currentDate) {
-    delay(1000);
+    // Print before delay/reboot so Serial catches output; flush before restart (USB CDC buffer).
     PTTL("\n* The previous version on the board is ", savedVersionStr);
     PTTL("* The robot will reboot and upgrade to ", versionStr);
+    Serial.flush();
+    delay(1500);
     resetAsNewBoard('X');
   }
 }

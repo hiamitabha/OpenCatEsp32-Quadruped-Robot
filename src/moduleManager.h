@@ -113,7 +113,7 @@ void initModule(char moduleCode) {
         break;
       }
 #endif
-#ifdef DOUBLE_IR_DISTANCE
+#ifdef DOUBLE_INFRARED_DISTANCE
     case EXTENSION_DOUBLE_IR_DISTANCE:
       {
         loadBySkillName("sit");
@@ -139,13 +139,31 @@ void initModule(char moduleCode) {
 #ifdef BACKTOUCH_PIN
     case EXTENSION_BACKTOUCH:
       {
-        backTouchSetup();
+        // Detect at init whether the sensor is connected; disable if not
+        bool connected = true;
+// #ifdef BACKTOUCH_PIN
+        pinMode(BACKTOUCH_PIN, INPUT_PULLDOWN); // avoid floating
+        analogRead(BACKTOUCH_PIN);              // prime ADC channel
+        delayMicroseconds(80);                  // settle
+        int raw = analogRead(BACKTOUCH_PIN);
+        PTHL("BackTouch raw", raw);
+        // With sensor connected and no touch it should read 4095. Otherwise treat as not connected.
+        if (raw != 4095) {
+          connected = false;
+        }
+// #endif
+        if (connected) {
+          backTouchSetup();
+        } else {
+          successQ = false; // 不启用该模块
+        }
         break;
       }
 #endif
 #ifdef CAMERA
     case EXTENSION_CAMERA:
       {
+        PTLF("Setting updateGyroQ to false...");
         updateGyroQ = false;
         i2cDetect(Wire);
 // #if defined BiBoard_V1_0 && !defined NYBBLE
@@ -168,11 +186,6 @@ void initModule(char moduleCode) {
 #endif
   }
   moduleActivatedQ[index] = successQ;
-#ifdef I2C_EEPROM_ADDRESS
-  i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + index, successQ);
-#else
-  config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
-#endif
 }
 
 void stopModule(char moduleCode) {
@@ -210,7 +223,7 @@ void stopModule(char moduleCode) {
         break;
       }
 #endif
-#ifdef DOUBLE_IR_DISTANCE
+#ifdef DOUBLE_INFRARED_DISTANCE
     case EXTENSION_DOUBLE_IR_DISTANCE:
       {
         manualHeadQ = false;
@@ -312,22 +325,32 @@ void reconfigureTheActiveModule(char *moduleCode) {
     i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, false);
 #endif
   }
-#ifndef I2C_EEPROM_ADDRESS
-  config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
-#endif
-  
+
   // Original logic: enable target module (skip for close-only operations)
   if (!isCloseOnlyOperation) {
     for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {
       if (moduleList[i] == targetModule && !moduleActivatedQ[i]) {
         PTHL("+  enable", moduleNames[i]);
-        initModule(moduleList[i]);
+        moduleActivatedQ[i] = true;
+#ifdef I2C_EEPROM_ADDRESS
+        i2c_eeprom_write_byte(EEPROM_MODULE_ENABLED_LIST + i, true);
+#endif
         statusChangedQ = true;
       }
     }
   }
-  if (statusChangedQ)  // if the status of the modules has changed, show the new status
+
+  if (statusChangedQ){  // if the status of the modules has changed, show the new status
+#ifndef I2C_EEPROM_ADDRESS
+    config.putBytes("moduleState", moduleActivatedQ, sizeof(moduleList) / sizeof(char));
+#endif
     showModuleStatus();
+    for (byte i = 0; i < sizeof(moduleList) / sizeof(char); i++) {
+      if (moduleList[i] == targetModule && moduleActivatedQ[i]) {
+        initModule(moduleList[i]);
+      }
+    }
+  }
 }
 
 void initModuleManager() {
@@ -398,9 +421,10 @@ void read_serial() {
         } while (serialPort->available());
         lastSerialTime = millis();
       }
-    } while (newCmd[cmdLen - 1] != terminator && long(millis() - lastSerialTime) < serialTimeout);  // the lower case tokens are encoded in ASCII and can be entered in Arduino IDE's serial monitor
-                                                                                                    // if the terminator of the command is set to "no line ending" or "new line", parsing can be different
-                                                                                                    // so it needs a timeout for the no line ending case
+    } while ((cmdLen == 0                                                                               // wait for at least 1 byte when cmdLen==0; 
+      || newCmd[cmdLen - 1] != terminator) && long(millis() - lastSerialTime) < serialTimeout);// the lower case tokens are encoded in ASCII and can be entered in Arduino IDE's serial monitor
+                                                                                               // if the terminator of the command is set to "no line ending" or "new line", parsing can be different
+                                                                                               // so it needs a timeout for the no line ending case
     // PTH("* " + source, long(millis() - lastSerialTime));
     if (!(token >= 'A' && token <= 'Z') || token == 'X' || token == 'R' || token == 'W') {  // serial monitor is used to send lower cased tokens by users
                                                                                             // delete the unexpected '\r' '\n' if the serial monitor sends line ending symbols
@@ -412,7 +436,8 @@ void read_serial() {
         }
       }
     }
-    cmdLen = (newCmd[cmdLen - 1] == terminator) ? cmdLen - 1 : cmdLen;
+    if (cmdLen > 0)
+      cmdLen = (newCmd[cmdLen - 1] == terminator) ? cmdLen - 1 : cmdLen;  // delete the terminator if it exists
     newCmd[cmdLen] = (token >= 'A' && token <= 'Z') ? '~' : '\0';
     if (token >= 'A' && token <= 'Z')
       newCmd[cmdLen + 1] = '\0';
@@ -428,12 +453,18 @@ void readSignal() {
   read_infrared();  //  newCmdIdx = 1
 #endif
   read_serial();  //  newCmdIdx = 2
-#ifdef BT_BLE
-  detectBle();  //  newCmdIdx = 3;
-  readBle();
+  
+  // Smart Bluetooth mode reading
+#if defined(BT_BLE)
+  if (activeBtMode == BT_MODE_SERVER) {    // activeBtMode == BT_MODE_NONE
+    detectBle();  //  newCmdIdx = 3;
+    readBle();
+  }
 #endif
-#ifdef BT_CLIENT
-  readBleClient();
+#if defined(BT_CLIENT)
+  if (activeBtMode == BT_MODE_CLIENT) {    // activeBtMode == BT_MODE_NONE
+    readBleClient();
+  }
 #endif
 // #ifdef WEB_SERVER
 //   if (webServerConnected)
@@ -467,8 +498,7 @@ void readSignal() {
 #ifdef GESTURE
     if (moduleActivatedQ[indexOfModule(EXTENSION_GESTURE)])
     {
-      gestureGetValue = read_gesture();
-      // PTHL("gestureValue02:", gestureGetValue);
+      read_gesture();
     }
 #endif
 #ifdef PIR

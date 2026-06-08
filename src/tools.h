@@ -1,5 +1,8 @@
+#ifndef TOOLS_H
+#define TOOLS_H
+
 // Serial Print macro directive abbreviations
-  // Simple macro directives
+// Simple macro directives
 #define PT(s)             Serial.print(s)          // Serial print
 #define PTD(s, format)    Serial.print(s, format)  // Formatted serial print
 #define PTL(s)            Serial.println(s)        // Serial print plus newline
@@ -164,8 +167,8 @@ void FPS() {
   if (millis() - loopTimer < 1000)
     fps++;
   else {
-    PT("FPS:\t");
-    PTL(fps);
+    PTHL("FPS:", fps);
+    // PTL(fps);
     fps = 0;
     loopTimer = millis();
   }
@@ -197,6 +200,7 @@ void resetCmd() {
   
   lastToken = token;
   newCmdIdx = 0;
+  skillCmdFromTaskQueue = false;
   if (token != T_SKILL && token != T_SKILL_DATA && token != T_SERVO_CALIBRATE && token != T_SERVO_FEEDBACK && token != T_SERVO_FOLLOW && token != T_CPG && token != T_CPG_BIN)
     token = '\0';
   newCmd[0] = '\0';
@@ -213,3 +217,4 @@ char *strGet(char *s, int i) {  //allow negative index
     return s;
   }
 }
+#endif

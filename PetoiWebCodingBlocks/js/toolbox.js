@@ -173,6 +173,8 @@ function createToolbox() {
                     },
                     { kind: "block", type: "getUltrasonicDistance" },
                     { kind: "block", type: "getCameraCoordinate" },
+                    { kind: "block", type: "get_gesture_value" },
+                    { kind: "block", type: "exit_gesture_mode" },
                     { kind: "block", type: "send_custom_command",
                         inputs: {
                             COMMAND: {
@@ -186,6 +188,19 @@ function createToolbox() {
                         } 
                     },
                     { kind: "block", type: "gyro_control" },
+                    { kind: "block", type: "get_input" },
+                    { kind: "block", type: "set_output",
+                        inputs: {
+                            VALUE: {
+                                shadow: {
+                                    type: "math_number",
+                                    fields: {
+                                        NUM: 0,
+                                    },
+                                },
+                            },
+                        } 
+                    },
                 ],
             },
             {
@@ -293,6 +308,7 @@ function createToolbox() {
                 contents: [
                     { kind: "block", type: "play_note" },
                     { kind: "block", type: "play_melody" },
+                    { kind: "block", type: "play_tone_list" },
                 ],
             },
         ],
@@ -488,6 +504,33 @@ function blocklyGlobalConfig() {
         },
     };
 
+    // 手势传感器读取积木
+    Blockly.Blocks["get_gesture_value"] = {
+        init: function () {
+            this.jsonInit({
+                type: "get_gesture_value",
+                message0: "Get gesture sensor value",
+                output: "Number",
+                colour: COMMUNICATION_COLOR, // 通信：红色
+                tooltip: "Read gesture value (0:Up,1:Down,2:Left,3:Right)"
+            });
+        },
+    };
+
+    // 退出手势识别模式积木
+    Blockly.Blocks["exit_gesture_mode"] = {
+        init: function () {
+            this.jsonInit({
+                type: "exit_gesture_mode",
+                message0: "Exit gesture recognition mode",
+                previousStatement: null,
+                nextStatement: null,
+                colour: COMMUNICATION_COLOR, // 通信：红色
+                tooltip: "Exit gesture recognition mode and stop gesture value printing"
+            });
+        },
+    };
+
     // 模拟输入积木
     Blockly.Blocks["get_analog_input"] = {
         init: function () {
@@ -580,6 +623,70 @@ function blocklyGlobalConfig() {
                 colour: COMMUNICATION_COLOR, // 通信积木：红色
                 tooltip: "",
             })
+        }
+    }
+
+    // 通用输入积木（digital/analog下拉菜单 + 引脚数字输入框）
+    Blockly.Blocks["get_input"] = {
+        init: function () {
+            this.jsonInit({
+                type: "get_input",
+                message0: getText("getInput"),
+                args0: [
+                    {
+                        type: "field_dropdown",
+                        name: "TYPE",
+                        options: [
+                            [getText("inputTypeDigital"), "digital"],
+                            [getText("inputTypeAnalog"), "analog"],
+                        ],
+                    },
+                    {
+                        type: "field_number",
+                        name: "PIN",
+                        value: 34,
+                        min: 0,
+                    },
+                ],
+                output: "Number",
+                colour: COMMUNICATION_COLOR, // 通信积木：红色
+                tooltip: "",
+            });
+        }
+    }
+
+    // 通用输出积木（digital/analog下拉菜单 + 引脚数字输入框 + Value数字输入框）
+    Blockly.Blocks["set_output"] = {
+        init: function () {
+            this.jsonInit({
+                type: "set_output",
+                message0: getText("setOutput"),
+                args0: [
+                    {
+                        type: "field_dropdown",
+                        name: "TYPE",
+                        options: [
+                            [getText("inputTypeDigital"), "digital"],
+                            [getText("inputTypeAnalog"), "analog"],
+                        ],
+                    },
+                    {
+                        type: "field_number",
+                        name: "PIN",
+                        value: 34,
+                        min: 0,
+                    },
+                    {
+                        type: "input_value",
+                        name: "VALUE",
+                        check: "Number",
+                    },
+                ],
+                previousStatement: null,
+                nextStatement: null,
+                colour: COMMUNICATION_COLOR, // 通信积木：红色
+                tooltip: "",
+            });
         }
     }
 
@@ -1127,7 +1234,7 @@ function blocklyGlobalConfig() {
                 .appendField(new Blockly.FieldDropdown(options), "COMMAND");
             this.appendDummyInput()
                 .appendField(delayLabel)
-                .appendField(new Blockly.FieldNumber(0, 0, 10, 0.01), "DELAY")
+                .appendField(new Blockly.FieldNumber(0.2, 0, 10, 0.01), "DELAY")
                 .appendField(unitLabel);
             this.setInputsInline(true);
             this.setPreviousStatement(true, null);
@@ -1155,7 +1262,7 @@ function blocklyGlobalConfig() {
                 .appendField(new Blockly.FieldDropdown(options), "COMMAND");
             this.appendDummyInput()
                 .appendField(delayLabel)
-                .appendField(new Blockly.FieldNumber(0, 0, 10, 0.01), "DELAY")
+                .appendField(new Blockly.FieldNumber(0.2, 0, 10, 0.01), "DELAY")
                 .appendField(unitLabel);
             this.setInputsInline(true);
             this.setPreviousStatement(true, null);
@@ -1204,6 +1311,36 @@ function blocklyGlobalConfig() {
                 previousStatement: null,
                 nextStatement: null,
                 colour: MOTION_COLOR,
+            });
+        },
+    };
+
+    // 音调和时长列表积木
+    Blockly.Blocks["play_tone_list"] = {
+        init: function () {
+            this.jsonInit({
+                type: "play_tone_list",
+                message0: getText("playToneListMessage"),
+                args0: [
+                    {
+                        type: "field_input",
+                        name: "TONE_LIST",
+                        text: "14,4,14,4,21,4,21,4,23,4,23,4,21,2",
+                        spellcheck: false,
+                    },
+                    {
+                        type: "field_number",
+                        name: "DELAY",
+                        value: 1,
+                        min: 0,
+                        max: 10,
+                        step: 0.01
+                    },
+                ],
+                previousStatement: null,
+                nextStatement: null,
+                colour: MUSIC_COLOR, // 音乐积木：粉色
+                tooltip: getText("playToneListTooltip"),
             });
         },
     };

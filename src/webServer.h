@@ -1,7 +1,12 @@
 #include "esp32-hal.h"
 #include <WiFi.h>
 #include <WebSocketsServer.h> // download at https://github.com/Links2004/arduinoWebSockets/
+#ifdef WIFI_MANAGER
 #include <WiFiManager.h> // download at https://github.com/tzapu/WiFiManager
+#endif
+#ifndef WIFI_MANAGER
+#include <esp_wifi.h>
+#endif
 
 #include <map>
 #include <ArduinoJson.h>
@@ -42,10 +47,10 @@
   #define WEB_DEBUG_F(msg)
 #endif
 
-// 网页服务器超时配置 (毫秒)
-#define HEARTBEAT_TIMEOUT 25000         // 心跳超时：25秒（匹配客户端20秒+缓冲）
-#define HEALTH_CHECK_INTERVAL 10000     // 健康检查间隔：10秒
-#define WEB_TASK_EXECUTION_TIMEOUT 30000 // 任务执行超时：30秒
+// 网页服务器超时配置 (毫秒) - 针对蓝牙共存优化
+#define HEARTBEAT_TIMEOUT 40000         // 心跳超时：40秒（增加缓冲时间应对BLE干扰）
+#define HEALTH_CHECK_INTERVAL 15000     // 健康检查间隔：15秒（减少检查频率）
+#define WEB_TASK_EXECUTION_TIMEOUT 45000 // 任务执行超时：45秒（增加执行时间）
 #define MAX_CLIENTS 2                   // 最大连接数限制
 
 // WiFi配置
@@ -85,10 +90,12 @@ bool webTaskActive = false;
 String generateTaskId();
 void startWebTask(String taskId);
 void completeWebTask();
-void errorWebTask(String errorMessage);
+void errorWebTask(const String & errorMessage);
 void processNextWebTask();
 void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
+#ifdef CAMERA
 void sendCameraData(int xCoord, int yCoord, int width, int height);
+#endif
 void sendUltrasonicData(int distance);
 void clearWebTask(String taskId);
 void checkConnectionHealth();
@@ -142,36 +149,53 @@ void sendSocketResponse(uint8_t clientId, String message) {
 void checkConnectionHealth() {
   unsigned long currentTime = millis();
   
-  // 检查心跳超时
-  for (auto it = lastHeartbeat.begin(); it != lastHeartbeat.end();) {
-    uint8_t clientId = it->first;
-    unsigned long lastHeartbeatTime = it->second;
-    
-    if (currentTime - lastHeartbeatTime > HEARTBEAT_TIMEOUT) {
-      WEB_ERROR("Client heartbeat timeout, disconnecting: ", clientId);
-      
-      // 发送超时通知
-      sendSocketResponse(clientId, "{\"type\":\"error\",\"error\":\"Heartbeat timeout\"}");
-      
-      // 断开连接
-      webSocket.disconnect(clientId);
-      
-      // 清理客户端状态
-      connectedClients.erase(clientId);
-      it = lastHeartbeat.erase(it);
-      
-      // 如果当前任务属于这个客户端，需要处理
-      if (webTaskActive && currentWebTaskId != "" && 
-          webTasks.find(currentWebTaskId) != webTasks.end() && 
-          webTasks[currentWebTaskId].clientId == clientId) {
-        errorWebTask("Client disconnected due to heartbeat timeout");
-      }
+  // 检查是否有BLE活动，如果有则放宽心跳超时
+  bool bleActive = false;
+#ifdef BT_CLIENT
+  extern boolean doScan;
+  extern boolean btConnected;
+  bleActive = doScan || btConnected;
+#endif
+  
+  unsigned long effectiveTimeout = bleActive ? (HEARTBEAT_TIMEOUT + 15000) : HEARTBEAT_TIMEOUT;
+  
+  // Collect timed-out clients first. webSocket.disconnect() runs the disconnect handler
+  // synchronously and erases lastHeartbeat entries — do not hold a map iterator across it
+  // or iterators are invalidated (undefined behavior / heap corruption).
+  uint8_t timedOutIds[MAX_CLIENTS];
+  size_t timedOutCount = 0;
+  for (const auto &entry : lastHeartbeat) {
+    if (currentTime - entry.second > effectiveTimeout && timedOutCount < MAX_CLIENTS) {
+      timedOutIds[timedOutCount++] = entry.first;
+    }
+  }
+  for (size_t i = 0; i < timedOutCount; i++) {
+    uint8_t clientId = timedOutIds[i];
+    if (bleActive) {
+      WEB_WARN("Client heartbeat timeout during BLE activity: ", clientId);
     } else {
-      ++it;
+      WEB_ERROR("Client heartbeat timeout, disconnecting: ", clientId);
+    }
+
+    String timeoutMsg = bleActive ?
+      "{\"type\":\"error\",\"error\":\"Heartbeat timeout during BLE scan\"}" :
+      "{\"type\":\"error\",\"error\":\"Heartbeat timeout\"}";
+    sendSocketResponse(clientId, timeoutMsg);
+
+    webSocket.disconnect(clientId);
+
+    connectedClients.erase(clientId);
+    lastHeartbeat.erase(clientId);
+
+    if (webTaskActive && currentWebTaskId != "" &&
+        webTasks.find(currentWebTaskId) != webTasks.end() &&
+        webTasks[currentWebTaskId].clientId == clientId) {
+      errorWebTask("Client disconnected due to heartbeat timeout");
     }
   }
 }
 
+#ifdef CAMERA
 // 发送摄像头数据到所有连接的客户端
 void sendCameraData(int xCoord, int yCoord, int width, int height) {
   if (!webServerConnected || connectedClients.empty()) {
@@ -196,6 +220,7 @@ void sendCameraData(int xCoord, int yCoord, int width, int height) {
     }
   }
 }
+#endif
 
 // 发送超声波数据到所有连接的客户端
 void sendUltrasonicData(int distance) {
@@ -385,12 +410,12 @@ void startWebTask(String taskId)
         // 解析命令
         token = webCmd[0];
         strcpy(newCmd, webCmd.c_str() + 1);
-        cmdLen = strlen(newCmd);
-        newCmd[cmdLen + 1] = '\0';
-        
-                  WEB_DEBUG("Parsed token: ", token);
-          WEB_DEBUG("Parsed command: ", newCmd);
-          WEB_DEBUG("Command length: ", cmdLen);
+        leftTrimSpaces(newCmd, &cmdLen);  // trim the space after token
+        cmdLen = strlen(newCmd);          // recalculate the command length
+        newCmd[cmdLen] = '\0';            // set the end of the command
+        WEB_DEBUG("Parsed token: ", token);
+        WEB_DEBUG("Parsed command: ", newCmd);
+        WEB_DEBUG("Command length: ", cmdLen);
       }
       newCmdIdx = 4;
 
@@ -469,8 +494,8 @@ void completeWebTask()
   processNextWebTask();
 }
 
-// Web任务错误处理
-void errorWebTask(String errorMessage)
+// Web task error handling
+void errorWebTask(const String & errorMessage)
 {
   if (!webTaskActive || currentWebTaskId == "") {
     return;
@@ -481,7 +506,7 @@ void errorWebTask(String errorMessage)
     task.status = "error";
     task.resultReady = true;
 
-    // 发送错误状态给客户端
+    // Send error status to client (ArduinoJson 7: JsonDocument replaces StaticJsonDocument)
     JsonDocument errorDoc;
     errorDoc["type"] = "response";
     errorDoc["taskId"] = currentWebTaskId;
@@ -525,29 +550,92 @@ void processNextWebTask()
   }
 }
 
-// WiFi配置函数
-bool connectWifi(String ssid, String password)
+// WiFi配置函数 - 增强版本，支持重试机制
+bool connectWifi(String ssid, String password, int maxRetries = 3)
 {
-  WiFi.begin(ssid.c_str(), password.c_str());
-  int timeout = 0;
-  while (WiFi.status() != WL_CONNECTED && timeout < 100) {
-    delay(100);
+  for (int retry = 0; retry < maxRetries; retry++) {
+    if (retry > 0) {
+      WEB_WARN("WiFi connection retry: ", retry);
+      delay(2000); // 重试前等待2秒
+    }
+    
+    WiFi.begin(ssid.c_str(), password.c_str());
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 100) {
+      delay(100);
+      #if WEB_DEBUG_LEVEL >= 3
+      PT('.');
+      #endif
+      timeout++;
+    }
     #if WEB_DEBUG_LEVEL >= 3
-    PT('.');
+    PTL();
     #endif
-    timeout++;
+    
+    if (WiFi.status() == WL_CONNECTED) {
+      WEB_INFO("WiFi connected on attempt: ", retry + 1);
+      return true;
+    } else {
+      WEB_ERROR("WiFi connection failed on attempt: ", retry + 1);
+      WiFi.disconnect(true); // 完全断开连接，为下次尝试做准备
+    }
   }
-  #if WEB_DEBUG_LEVEL >= 3
-  PTL();
-  #endif
-  if (WiFi.status() == WL_CONNECTED) {
-    return true;
-  } else {
-    Serial.println("connection failed");
-    return false;
-  }
+  
+  Serial.println("All WiFi connection attempts failed");
+  return false;
 }
 
+#ifndef WIFI_MANAGER
+// 当未启用WIFI_MANAGER时，尝试读取并使用之前保存的WiFi信息连接
+bool connectWifiFromStoredConfig()
+{
+  // 检查可用内存
+  size_t freeHeap = ESP.getFreeHeap();
+  WEB_INFO("Free heap before WiFi init: ", freeHeap);
+  
+  if (freeHeap < 50000) { // 如果可用内存少于50KB
+    WEB_ERROR("Insufficient memory for WiFi initialization: ", freeHeap);
+    return false;
+  }
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+
+  wifi_config_t cfg;
+  memset(&cfg, 0, sizeof(cfg));
+  if (esp_wifi_get_config(WIFI_IF_STA, &cfg) != ESP_OK) {
+    WEB_ERROR_F("Failed to get stored WiFi config");
+    return false;
+  }
+
+  String savedSsid = String(reinterpret_cast<char*>(cfg.sta.ssid));
+  String savedPassword = String(reinterpret_cast<char*>(cfg.sta.password));
+
+  if (savedSsid.length() == 0) {
+    WEB_WARN_F("No stored SSID found");
+    return false;
+  }
+
+  webServerConnected = connectWifi(savedSsid, savedPassword);
+
+  if (webServerConnected) {
+    printToAllPorts("Successfully connected Wifi to IP Address: " + WiFi.localIP().toString());
+    // 启动WebSocket服务器
+    webSocket.begin();
+    webSocket.onEvent(handleWebSocketEvent);
+    WEB_INFO_F("WebSocket server started");
+    
+    // 显示连接后的内存状态
+    size_t freeHeapAfter = ESP.getFreeHeap();
+    WEB_INFO("Free heap after WiFi connection: ", freeHeapAfter);
+  } else {
+    WEB_ERROR_F("Timeout: Fail to connect web server!");
+  }
+  return webServerConnected;
+}
+#endif
+
+#ifdef WIFI_MANAGER
 void startWifiManager() {
 #ifdef I2C_EEPROM_ADDRESS
   i2c_eeprom_write_byte(EEPROM_WIFI_MANAGER, false);
@@ -581,6 +669,7 @@ void startWifiManager() {
   config.putBool("WifiManager", webServerConnected);
 #endif
 }
+#endif
 
 void resetWifiManager() {
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -600,9 +689,25 @@ void WebServerLoop()
 {
   if (webServerConnected) {
     webSocket.loop();
+    
+    // 监控BLE活动对WebSocket的影响
+    static unsigned long lastBleStatusLog = 0;
+    unsigned long currentTime = millis();
+    
+    if (currentTime - lastBleStatusLog > 30000) { // 每30秒记录一次状态
+#ifdef BT_CLIENT
+      extern boolean doScan;
+      extern boolean btConnected;
+      if (doScan || btConnected) {
+        WEB_INFO("BLE active - doScan: ", doScan);
+        WEB_INFO("BLE connected: ", btConnected);
+        WEB_INFO("Active WebSocket clients: ", connectedClients.size());
+      }
+#endif
+      lastBleStatusLog = currentTime;
+    }
 
     // 定期检查连接健康状态
-    unsigned long currentTime = millis();
     if (currentTime - lastHealthCheckTime > HEALTH_CHECK_INTERVAL) {
       checkConnectionHealth();
       lastHealthCheckTime = currentTime;

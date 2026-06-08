@@ -232,7 +232,16 @@ public:
   bool read_mpu6050() {
     if (!dmpReady)
       return false;
-    if (dmpGetCurrentFIFOPacket(fifoBuffer)) {  // Get the Latest packet
+    
+    // Try to read FIFO packet
+    // Note: GetCurrentFIFOPacket may call resetFIFO() which can crash if I2C fails
+    // This function is called from readIMU() which already holds imuLockI2c
+    int8_t packetResult = dmpGetCurrentFIFOPacket(fifoBuffer);
+    if (packetResult < 0) {
+      // I2C communication error occurred, return false to indicate failure
+      return false;
+    }
+    if (packetResult > 0) {  // Successfully got packet (returns 1 on success, 0 on failure)
       // display Euler angles in degrees
       dmpGetQuaternion(&q, fifoBuffer);
       dmpGetAccel(&aa, fifoBuffer);
@@ -253,6 +262,8 @@ public:
       }
       return true;
     }
+    // packetResult == 0 means no data available (normal)
+    // packetResult < 0 would indicate error, but function returns int8_t (0 or 1)
     return false;
   }
 
@@ -565,17 +576,30 @@ void icm42670Setup(bool calibrateQ = true) {
 // ================================================================
 
 #define PRINT_ACCELERATION
+static unsigned long lastPrint6AxisTime = 0;
+const unsigned long PRINT6AXIS_MIN_INTERVAL = 200;  // Minimum 200ms between prints to prevent stack overflow (sprintf uses significant stack)
+
 void print6Axis() {
   if (!updateGyroQ)
     return;
-  char buffer[50];  // Adjust buffer size as needed
+  
+  // Limit print frequency to prevent stack overflow from frequent calls
+  // sprintf() with float formatting uses significant stack space on ESP32
+  unsigned long currentTime = millis();
+  if (currentTime - lastPrint6AxisTime < PRINT6AXIS_MIN_INTERVAL) {
+    return;  // Skip if called too frequently
+  }
+  lastPrint6AxisTime = currentTime;
+  
+  // Use static buffer to reduce stack usage (shared across calls)
+  static char buffer[60];  // Increased size for safety, but static to avoid stack allocation
 #ifdef IMU_ICM42670
   if (icmQ) {
 #ifdef PRINT_ACCELERATION
-    sprintf(buffer, "ICM:%6.1f%6.1f%6.1f%7.1f%7.1f%7.1f\t",  //
-            icm.a_real[0], icm.a_real[1], icm.a_real[2], -icm.ypr[0], icm.ypr[1], icm.ypr[2]);
+    snprintf(buffer, sizeof(buffer), "ICM:%6.2f%6.2f%6.2f%7.1f%7.1f%7.1f\t",  //
+            icm.a_real[0] * GRAVITY, icm.a_real[1] * GRAVITY, icm.a_real[2] * GRAVITY, -icm.ypr[0], icm.ypr[1], icm.ypr[2]);
 #else
-    sprintf(buffer, "ICM%7.1f%7.1f%7.1f\t", -icm.ypr[0], icm.ypr[1], icm.ypr[2]);
+    snprintf(buffer, sizeof(buffer), "ICM%7.1f%7.1f%7.1f\t", -icm.ypr[0], icm.ypr[1], icm.ypr[2]);
 #endif
     printToAllPorts(buffer, 0);
   }
@@ -583,10 +607,10 @@ void print6Axis() {
 #ifdef IMU_MPU6050
   if (mpuQ) {
 #ifdef PRINT_ACCELERATION
-    sprintf(buffer, "MCU:%6.1f%6.1f%6.1f%7.1f%7.1f%7.1f",  // 7x6 = 42
+    snprintf(buffer, sizeof(buffer), "MCU:%6.2f%6.2f%6.2f%7.1f%7.1f%7.1f",  // 7x6 = 42
             mpu.a_real[0], mpu.a_real[1], mpu.a_real[2], -mpu.ypr[0], mpu.ypr[1], mpu.ypr[2]);  //, aaWorld.z);
 #else
-    sprintf(buffer, "MCU%7.1f%7.1f%7.1f", -mpu.ypr[0], mpu.ypr[1], mpu.ypr[2]);
+    snprintf(buffer, sizeof(buffer), "MCU%7.1f%7.1f%7.1f", -mpu.ypr[0], mpu.ypr[1], mpu.ypr[2]);
 #endif
     printToAllPorts(buffer, 0);
   }
@@ -623,28 +647,59 @@ bool readIMU() {
   bool updated = false;
   if (updateGyroQ && !(frame % imuSkip)) {
 #ifndef USE_WIRE1
-    while (cameraLockI2c)
-      delay(1);  // wait for the i2c bus to be released by the camera. potentially to cause dead lock with imu.
+    // Use FreeRTOS delay function and add timeout mechanism
+    unsigned long waitStart = millis();
+    const unsigned long maxWaitTime = 500; // Maximum wait time 500ms
+    
+    while (cameraLockI2c && updateGyroQ) {
+      if (millis() - waitStart > maxWaitTime) {
+        PTLF("Camera I2C lock timeout");
+        return false; // Timeout exit
+      }
+      vTaskDelay(1 / portTICK_PERIOD_MS);  // Use FreeRTOS delay function
+    }
 #endif
-    while (gestureLockI2c)
-      delay(1);  // wait for the i2c bus to be released by the gesture. potentially to cause dead lock with imu.
-    while (eepromLockI2c)
-      delay(1);  // wait for the i2c bus to be released by the EEPROM operations.
+    // Reuse existing timeout timer variable
+    waitStart = millis(); // Reset timeout timer
+    
+    while (gestureLockI2c && updateGyroQ) {
+      if (millis() - waitStart > maxWaitTime) {
+        PTLF("Gesture I2C lock timeout");
+        return false; // Timeout exit
+      }
+      vTaskDelay(1 / portTICK_PERIOD_MS);  // Use FreeRTOS delay function
+    }
+    
+    waitStart = millis(); // Reset timer
+    while (eepromLockI2c && updateGyroQ) {
+      if (millis() - waitStart > maxWaitTime) {
+        PTLF("EEPROM I2C lock timeout");
+        return false; // Timeout exit
+      }
+      vTaskDelay(1 / portTICK_PERIOD_MS);  // Use FreeRTOS delay function
+    }
+    
+    // If updateGyroQ became false during waiting, exit early
+    if (!updateGyroQ) {
+      return false;
+    }
     imuLockI2c = true;
-    // Get the stack high water mark
-    // uint32_t stackHighWaterMark = uxTaskGetStackHighWaterMark(TASK_imu);
-    // uint32_t stackHighWaterMark = uxTaskGetStackHighWaterMark(taskCalibrateImuUsingCore0_handle);
-
-    // Serial.print("IMU task stack : ");
-    // Serial.print(stackHighWaterMark);
-    // Serial.println(" bytes");
+    
+    // Final check before IMU operations - exit if requested
+    if (!updateGyroQ) {
+      imuLockI2c = false;  // Release lock before exiting
+      return false;
+    }
+    
 #ifdef IMU_ICM42670
     if (icmQ) {
       updated = true;
       icm.getImuGyro();
       for (byte i = 0; i < 3; i++) {
-        icm.a_real[i] *= GRAVITY;
-        xyzReal[i] = icm.a_real[i];
+        // ICM42670's a_real is already in g units from transformIMUDataWithOffset()
+        // Multiply by GRAVITY to match the expected scale (10.0 ≈ 1g)
+        // Don't modify icm.a_real[i] directly to avoid cumulative multiplication
+        xyzReal[i] = icm.a_real[i] * GRAVITY;
         ypr[i] = icm.ypr[i];
       }
       // Negate yaw to match polar coordinate convention (positive = counterclockwise)
@@ -655,21 +710,132 @@ bool readIMU() {
     // if programming failed, don't try to do anything
     // read a packet from FIFO
     if (mpuQ) {
-      updated |= mpu.read_mpu6050();  // mpu6050's frequency is lower than icm42670
-      for (byte i = 0; i < 3; i++) {
-        xyzReal[i] = mpu.a_real[i];
-        ypr[i] = mpu.ypr[i];
+      // Add error handling for MPU6050 read
+      // If read fails, it returns false and we skip updating data
+      // This prevents crashes from I2C errors
+      bool readSuccess = mpu.read_mpu6050();  // mpu6050's frequency is lower than icm42670
+      if (readSuccess) {
+        updated = true;
+        for (byte i = 0; i < 3; i++) {
+          xyzReal[i] = mpu.a_real[i];
+          ypr[i] = mpu.ypr[i];
+        }
+        // Negate yaw to match polar coordinate convention (positive = counterclockwise)
+        ypr[0] = -ypr[0];
       }
-      // Negate yaw to match polar coordinate convention (positive = counterclockwise)
-      ypr[0] = -ypr[0];
+      // If read fails, don't update data - use previous values
+      // This prevents using corrupted data that could trigger false exceptions
     }
 #endif
     imuLockI2c = false;
     return updated;
   } else {
-    delay(1);  // to avoid the task to be blocked the wdt
+    vTaskDelay(1 / portTICK_PERIOD_MS);  // Use FreeRTOS delay function instead of delay()
     return false;
   }
+}
+
+// Wait for IMU readings to converge before evaluating exceptions
+void waitForImuConvergence() {
+  if (!updateGyroQ) return;
+  
+  const float YPR_THRESHOLD = 0.2;      // Degrees threshold for ypr convergence
+  const float XYZ_THRESHOLD = 0.1;      // G-force threshold for acceleration convergence  
+  const int MAX_ITERATIONS = 500;       // Maximum iterations to prevent infinite loop
+  const int MIN_STABLE_READINGS = 5;    // Increased to 5 for better stability
+  
+  float prev_ypr[3] = {0, 0, 0};
+  float prev_xyz[3] = {0, 0, 0};
+  int stable_count = 0;
+  int iteration = 0;
+  
+  PTL("Waiting for IMU convergence...");
+  // Wait for taskIMU to start providing stable data
+  // No need to lock I2C since we're not directly accessing IMU hardware
+  PTL("Waiting for taskIMU to provide stable data...");
+  
+  // Initial reading from taskIMU processed data
+  // Wait for taskIMU to update data at least once
+  unsigned long waitStart = millis();
+  while (!imuUpdated && (millis() - waitStart) < 1000) {
+    delay(10);  // Wait for taskIMU to update
+  }
+  
+  if (!imuUpdated) {
+    PTL("Warning: taskIMU data not ready, using current values");
+  }
+  
+  // Get initial values from taskIMU processed data
+  for (int i = 0; i < 3; i++) {
+    prev_ypr[i] = ypr[i];
+    prev_xyz[i] = xyzReal[i];
+  }
+  
+  while (iteration < MAX_ITERATIONS) {
+    delay(20);  // Wait for taskIMU to update data
+    
+    // Wait for taskIMU to provide new data
+    bool newDataAvailable = false;
+    unsigned long dataWaitStart = millis();
+    while (!newDataAvailable && (millis() - dataWaitStart) < 50) {
+      if (imuUpdated) {  // taskIMU sets this flag when new data is available
+        newDataAvailable = true;
+      } else {
+        delay(1);  // Wait for taskIMU to update
+      }
+    }
+    
+    // Check if we got new data from taskIMU
+    if (newDataAvailable) {
+      bool converged = true;
+      // print6Axis();
+      PT('.');
+      
+      // Calculate overall ypr difference using vector distance
+      float ypr_diff = sqrt(pow(ypr[0] - prev_ypr[0], 2) + 
+                           pow(ypr[1] - prev_ypr[1], 2) + 
+                           pow(ypr[2] - prev_ypr[2], 2));
+      
+      // Calculate overall xyz difference using vector distance  
+      float xyz_diff = sqrt(pow(xyzReal[0] - prev_xyz[0], 2) + 
+                           pow(xyzReal[1] - prev_xyz[1], 2) + 
+                           pow(xyzReal[2] - prev_xyz[2], 2));
+      
+      // Print convergence info right after IMU data, no newline
+      // PTH("\t\t\t\t\t\tYPR diff: ", ypr_diff);
+      // PTH(", XYZ diff: ", xyz_diff);
+      // PTH(", Remaining: ", MAX_ITERATIONS - iteration);
+      // PTL("");
+      
+      // Check convergence based on overall vector differences
+      if (ypr_diff > YPR_THRESHOLD || xyz_diff > XYZ_THRESHOLD) {
+        converged = false;
+      }
+      
+      if (converged) {
+        stable_count++;
+        if (stable_count >= MIN_STABLE_READINGS) {
+          PTL("\nIMU converged successfully");
+          break;
+        }
+      } else {
+        stable_count = 0;  // Reset stable count if not converged
+        // Update previous values
+        for (int i = 0; i < 3; i++) {
+          prev_ypr[i] = ypr[i];
+          prev_xyz[i] = xyzReal[i];
+        }
+      }
+    }
+    
+    iteration++;
+  }
+  
+  if (iteration >= MAX_ITERATIONS) {
+    PTL("\nIMU convergence timeout - proceeding anyway");
+  }
+  
+  PTL("\nIMU convergence detection completed using taskIMU data");
 }
 
 void getImuException() {
@@ -695,24 +861,36 @@ void getImuException() {
   // PTT(fabs(xyzReal[2] - previousXYZ[2]), '\t');
 
   if (fabs(ypr[2]) > 85) {  //  imuException = aaReal.z < 0;
-    if (mpuQ) {  // mpu is faster in detecting instant acceleration which may lead to false positive
-      if (xyzReal[2] < 1)
+    if (mpuQ) {  // MPU is faster in detecting instant acceleration which may lead to false positive
+      if (xyzReal[2] < 1) {
         imuException = IMU_EXCEPTION_FLIPPED;  // flipped
-    } else if (xyzReal[2] < -1)
+        // Debug: log IMU data when fall over is detected
+        #ifdef DEBUG_IMU_EXCEPTION
+        PTHL("Fall over detected - ypr[2]: ", ypr[2]);
+        PTHL("Fall over detected - xyzReal[2]: ", xyzReal[2]);
+        #endif
+      }
+    } else if (xyzReal[2] < -1) {
       imuException = IMU_EXCEPTION_FLIPPED;  // flipped
+      // Debug: log IMU data when fall over is detected
+      #ifdef DEBUG_IMU_EXCEPTION
+      PTHL("Fall over detected - ypr[2]: ", ypr[2]);
+      PTHL("Fall over detected - xyzReal[2]: ", xyzReal[2]);
+      #endif
+    }
   }
 #ifndef ROBOT_ARM
   else if (ypr[1] < -50 || ypr[1] > 75)
     imuException = IMU_EXCEPTION_LIFTED;
   else if (!moduleDemoQ && fabs(xyzReal[2] - previousXYZ[2]) > thresZ * gFactor
-           && fabs(xyzReal[2]) > thresZ * gFactor)  // z direction shock)
+           && fabs(xyzReal[2]) > thresZ * gFactor)  // Z direction shock
     imuException = IMU_EXCEPTION_KNOCKED;
   else if (!moduleDemoQ
            && (  // not in demo mode
                (fabs(xyzReal[0] - previousXYZ[0]) > 4000 * gFactor
-                && fabs(xyzReal[0]) > thresX * gFactor)  // x direction shock
+                && fabs(xyzReal[0]) > thresX * gFactor)  // X direction shock
                || (fabs(xyzReal[1] - previousXYZ[1]) > 6000 * gFactor
-                   && fabs(xyzReal[1]) > thresY * gFactor)  // y direction shock
+                   && fabs(xyzReal[1]) > thresY * gFactor)  // Y direction shock
                )) {
     imuException = IMU_EXCEPTION_PUSHED;
   }
@@ -734,8 +912,18 @@ void getImuException() {
     while (targetDiff < -180) targetDiff += 360;
     
     // Check if we've reached or exceeded the target angle
-    if ((targetDiff > 0 && currentYawDiff >= targetDiff) || 
-        (targetDiff < 0 && currentYawDiff <= targetDiff)) {
+    // Special handling for ±180 degree boundary
+    bool targetReached = false;
+    if (fabs(targetDiff) >= 179.5) {
+      // For ~180 degree turns, check if we're close to the opposite side
+      targetReached = fabs(currentYawDiff - targetDiff) < 5.0 || fabs(fabs(currentYawDiff) - 180) < 5.0;
+    } else if (targetDiff > 0) {
+      targetReached = currentYawDiff >= targetDiff;
+    } else if (targetDiff < 0) {
+      targetReached = currentYawDiff <= targetDiff;
+    }
+    
+    if (targetReached) {
       imuException = IMU_EXCEPTION_TURNING;
       turningQ = false;  // Stop turning control
       needTurning = true;  // Set flag to prevent exception from being skipped
@@ -757,21 +945,68 @@ void getImuException() {
 long imuTime = 0;
 void taskIMU(void *parameter) {
   bool* running = (bool*)parameter;
+  // PTHL("updateGyroQ", updateGyroQ);
+  // PTHL("run para:", *running);
   
-  while (*running) {
+  unsigned long lastStackCheck = 0;
+  const unsigned long stackCheckInterval = 10000;  // Check stack every 10 seconds
+  
+  while (*running) { // check pointer value and global variable
+    // Monitor stack usage periodically
+    if (millis() - lastStackCheck > stackCheckInterval) {
+      UBaseType_t stackRemaining = uxTaskGetStackHighWaterMark(NULL);
+      if (stackRemaining < 256) {  // Increased threshold from 512 to 256 (more lenient warning)
+        PTHL("WARNING: IMU task stack low! Remaining bytes: ", stackRemaining);
+      }
+      lastStackCheck = millis();
+    }
+    
     if (millis() - imuTime > 5) {
       imuUpdated = readIMU();
       getImuException();
       imuTime = millis();
     } else
-      delay(1);  // to avoid the task to be blocked the wdt
+    {
+      // ensure task is not blocked
+      vTaskDelay(1 / portTICK_PERIOD_MS);
+    }
   }
-  PTLF("IMU task terminated for web coding");
+  
+  // PTHL("before delete, updateGyroQ =", updateGyroQ);
+  // PTHL("*running =", *running);
+  PTLF("Exiting IMU task, calling vTaskDelete...");
+  
+  // ensure task can exit correctly
+  vTaskDelay(10 / portTICK_PERIOD_MS);   // Reduce delay to ensure fast exit
+  
+  // Force delete task
   vTaskDelete(NULL);
 }
 
 void taskCalibrateImuUsingCore0(void *parameter);  // Forward declaration -ee-
 
+void createIMUTask() {
+  PTL("Creating IMU task...");
+  
+  xTaskCreatePinnedToCore(taskIMU,        // task function
+                          "TaskIMU",      // task name
+                          2500,           // task stack size (increased from 2000 to prevent crashes in GetCurrentFIFOPacket)
+                          &updateGyroQ,   // parameters
+                          1,              // priority
+                          &TASK_imu,      // handle
+                          0);             // core
+  delay(100);
+  
+  // get task handle, for subsequent operations
+  if (TASK_imu == NULL) {
+    TASK_imu = xTaskGetHandle("TaskIMU");
+    if (TASK_imu == NULL) {
+      PTLF("Warning: Failed to get IMU task handle!");
+    } else {
+      PTLF("IMU task created successfully");
+    }
+  }
+}
 void imuSetup() {
   if (newBoard) {
 #ifndef AUTO_INIT
@@ -803,16 +1038,10 @@ void imuSetup() {
     beep(18, 50, 50, 6);
   previous_ypr[0] = ypr[0];
   
-  xTaskCreatePinnedToCore(taskIMU,  // task function
-                          "TaskIMU",  // name
-                          9000,  // task stack size​​: 8700 determined by uxTaskGetStackHighWaterMark()
-                          &updateGyroQ,  // parameters
-                          1,  // priority
-                          &TASK_imu,  // handle
-                          0);  // core
-  delay(100);
-  TASK_imu = xTaskGetHandle("TaskIMU");
-
+  // ensure updateGyroQ is true
+  updateGyroQ = true;
+  
+  createIMUTask();
   // imuException = xyzReal[3] < 0;
 }
 
