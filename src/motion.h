@@ -542,6 +542,18 @@ void updateCPG() {
     for (byte i = 0; i < 8; i++)
       tQueue->addTask(T_CPG_BIN, gaits[i], 2000);
     tQueue->addTask(T_REST, "", 0);
+  } else if (subToken == 'c') {  // "rc": a smooth, balance-safe choreography built from Bittle's own hand-tuned skills
+    // Raw CPG oscillation can overpower the balance loop and topple the robot. Instead we chain proven single
+    // skills (defined in InstinctBittleESP*.h) through the nested task queue. Each one is pre-tuned to stay
+    // stable; the per-task delay simply gives that skill time to finish before the next is loaded.
+    tQueue->addTask(T_SKILL, "balance", 1000);  // stand up and settle
+    tQueue->addTask(T_BEEP, "14 4 16 4 19 4");  // a little fanfare to announce the routine
+    tQueue->addTask(T_SKILL, "str", 2000);      // a graceful stretch
+    tQueue->addTask(T_SKILL, "up", 1000);       // back to a stable stand
+    tQueue->addTask(T_SKILL, "mw", 4000);       // moonwalk — the elegant showcase
+    tQueue->addTask(T_SKILL, "nd", 1500);       // a gentle nod
+    tQueue->addTask(T_SKILL, "sit", 1500);      // sit down
+    tQueue->addTask(T_REST, "", 0);             // relax the servos
   } else {
     if (parsingShift == 0)  //shift
     {

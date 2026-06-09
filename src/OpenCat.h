@@ -89,7 +89,7 @@ String uniqueName = "";
 #define BT_BLE  // toggle Bluetooth Low Energy (BLE）
 #define BT_SSP  // toggle Bluetooth Secure Simple Pairing (BT_SSP)
 // #define WIFI_MANAGER  // toggle WiFi Manager. It should be always off for now
-#define WEB_SERVER // toggle web server
+//#define WEB_SERVER // toggle web server
 // #define SHOW_FPS // toggle FPS display
 #ifndef VT
 #define GYRO_PIN  // toggle the Inertia Measurement Unit (IMU), i.e. the gyroscope
@@ -345,7 +345,8 @@ bool newBoard = false;
                                       // it takes effect the next time the board boosup. it won't interrupt the current connecton.
 // #define T_MELODY 'o'
 #define T_SIGNAL_GEN 'o'  // signal generator for joint movements
-#define T_CPG 'r'      //Oscillator for Central Pattern Generator (ASCII)
+#define T_CPG 'r'      //Oscillator for Central Pattern Generator (ASCII). "rg" plays the built-in gait demo; \
+                       // "rc" plays a smooth, balance-safe choreography of stock skills via the nested task queue (see updateCPG())
 #define T_CPG_BIN 'Q'  //Oscillator for Central Pattern Generator (Binary)
 #define T_PAUSE 'p'  // pause
 #define T_POWER 'P'  // power, print the voltage
