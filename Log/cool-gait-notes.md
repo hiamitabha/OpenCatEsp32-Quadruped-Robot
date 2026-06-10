@@ -167,3 +167,50 @@ kgrv
 If the bob is too subtle or too strong, adjust the knee values (`58`/`42`) — keep all four equal and
 within ~±12 of `50`. Only added to `InstinctBittleESP_arm.h` (the `ROBOT_ARM` build); a non-arm build
 would also need it in `InstinctBittleESP.h`.
+
+---
+
+# New skill `wow` — a showstopper routine (still balance-safe)
+
+A fancier three-act behavior, built on the same safety principles as `grv` plus the loop feature
+observed in `mw` (moonwalk).
+
+## Choreography (12 frames, `period = -12`)
+
+1. **Rolling body wave, looped 3×** (`loopCycle {2, 5, 3}`): crouch → front legs dip (head bows) →
+   dip travels to the back legs (head lifts) → rise tall → neutral. A dancer's body roll, front to
+   back, repeated three times.
+2. **Side-to-side sway** (frames 6–8): lean left / right / left, knees `58/44` per side, head pan
+   tracking the lean (`±20`).
+3. **Finale** (frames 9–11): deep theatrical bow (front knees 66, back 42, head down, held 300 ms)
+   → rise to a tall proud pose (knees 36, head up) → settle back to stand.
+
+## Safety guarantees (same playbook as `grv`)
+
+- Shoulders frozen at `25,25,20,20` (standing stance) in **all 12 frames** — footprint never changes.
+- Knees bounded to 36–68 (stand = 50; stock skills like `sit` go to 105, so this is conservative).
+- Side-sway asymmetry capped at 14 between left/right knees (±7 from center) — far gentler than the
+  stock `heng` CPG sway.
+- Slow transition speeds (4–6 ≈ 0.5–0.75 deg/step in `transform()`); brief holds via delay bytes.
+- Entry frame == exit frame == standing stance; gyro balancing active throughout (name not in the
+  fast-motion exclusion list, `skill.h:284`).
+- Validated: 247 bytes = 7 header + 12×20; both registries aligned at 87 entries.
+
+## Command to invoke
+
+```
+kwow
+```
+
+(`kwowL` / `kwowR` mirror which way the sway leans first.)
+
+## Tuning
+
+- Wave depth: front/back dip values `64`/`52` (keep pairs equal left-right).
+- Sway lean: `58/44` split — shrink toward `51/51` to tame, don't exceed ~`60/42`.
+- Bow depth: `66/42` front/back. Extra repeats of the wave: bump the third loop byte (`3`).
+
+## Commit
+
+- `eb88ebf` — `Add "grv" groove skill: a custom balance-safe behavior`
+- `wow` skill committed after (see git log).
