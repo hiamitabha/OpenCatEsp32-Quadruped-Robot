@@ -89,3 +89,81 @@ Start with a modest amplitude (25°) since it drives the joints directly without
 - Tamer version: drop `mw`, build purely from postures (`balance → str → sit → up → rest`).
 - Other gentle behaviors to swap in: `wh` (wave hand), `gdb` (good boy).
 - For a trig-based gait that stays balanced, use the low-amplitude stock CPG presets via `rg`.
+
+---
+
+# New skill `grv` ("groove") — a custom balance-safe behavior
+
+Added a brand-new skill directly into `src/InstinctBittleESP_arm.h`. The robot stands in place and
+gently bobs while swaying/nodding its head — a slow meditative groove, unlike anything in the stock
+skill list.
+
+## Skill-array format (learned from studying the file + `skill.h`)
+
+- **Header bytes** (`dataLen()` in `skill.h:118`): `4` for `period > 0`, `7` for behaviors (`period < 0`).
+  - `{period, expectedPitch, expectedRoll, angleDataRatio}` then (behaviors only)
+    `{loopStart, loopEnd, repeat}`.
+- **`period`**: `>1` = looping gait, `1` = static posture, `<0` = one-shot behavior (`abs` = frame count).
+- **`frameSize`**: gait = `WALKING_DOF` (8); posture = `DOF` (16); behavior = `DOF + 4` (20).
+- **Behavior frame** = 16 joint angles + 4 trailing bytes `{transitionSpeed, delay, trigAxis, trigAngle}`.
+  - transition speed: `transform()` gets `speedByte/8.0`; bigger = faster/fewer interpolation steps.
+  - delay: holds `delayByte * 50 ms` after the frame (`skill.h:355`).
+  - trigAxis/trigAngle: optional IMU gating (leave `0`).
+- **loopCycle** `{start, end, repeat}`: at frame `== end` it jumps back to `start` until `repeat`
+  passes complete (`skill.h:357`, `perform()` `skill.h:282`).
+- **Joint columns**: `0` head pan, `1` head tilt (nod), `2` tail/arm clip, `4–7` unused (skipped when
+  `WALKING_DOF==8`), `8–11` shoulders (FL,FR,BL,BR), `12–15` knees (FL,FR,BL,BR).
+
+## Why `grv` cannot topple
+
+- It's a behavior, so **gyro balancing is active** (its name isn't in the fast-motion exclusion list,
+  `skill.h:284`) — the IMU actively corrects drift.
+- **Shoulders are frozen** at the proven standing stance (`25,25,20,20` from `up`/`balance`), so the
+  feet keep their stable footprint.
+- **All four knees move identically** (`50 → 58 → 42`, only ±8°) → symmetric, so the center of mass
+  never shifts in roll or pitch.
+- Expression comes only from **head pan/tilt** (no balance impact); the arm (joint 2) stays neutral,
+  matching how the codebase avoids perturbing it (`skill.h:496`, `mirror()` skips index 2).
+- It **starts and ends in the standing stance** — no abrupt entry/exit.
+
+## The data
+
+```c
+const int8_t grv[] PROGMEM = {
+-6, 0, 0, 1,        // behavior, 6 frames, expected pitch/roll 0, angleRatio 1
+ 1, 4, 4,           // loop frames 1..4, repeat 4x
+    0,   0, 0,0,0,0,0,0,  25,25,20,20,  50,50,50,50,   8, 2, 0, 0,  // neutral stand (entry)
+   25,  15, 0,0,0,0,0,0,  25,25,20,20,  58,58,58,58,   6, 0, 0, 0,  // look left + dip
+  -25,   0, 0,0,0,0,0,0,  25,25,20,20,  42,42,42,42,   6, 0, 0, 0,  // look right + rise
+   25,  15, 0,0,0,0,0,0,  25,25,20,20,  58,58,58,58,   6, 0, 0, 0,  // look left + dip
+  -25,   0, 0,0,0,0,0,0,  25,25,20,20,  42,42,42,42,   6, 0, 0, 0,  // look right + rise
+    0,   0, 0,0,0,0,0,0,  25,25,20,20,  50,50,50,50,   8, 2, 0, 0,  // settle back (exit)
+};
+```
+
+## Registration (must keep both arrays in the SAME order)
+
+In `src/InstinctBittleESP_arm.h`:
+- Added `"grvI"` to `skillNameWithType[]` (the trailing type letter is dropped at lookup, `skill.h:10`).
+- Added `grv` to the full `progmemPointer[]`.
+- Bumped the `//number of skills:` comment to 86.
+- Both arrays validated at 86 entries, aligned, `grvI` → `grv`.
+
+Note: skills load straight from PROGMEM here because `I2C_EEPROM_ADDRESS` is commented out
+(`OpenCat.h:86`), so editing the two arrays + data is enough — no EEPROM rewrite needed.
+
+## Command to invoke
+
+Over serial (115200 baud):
+
+```
+kgrv
+```
+
+(`k` = `T_SKILL`; `grv` = skill name. `kgrvL` / `kgrvR` mirror the starting head direction.)
+
+## Tuning
+
+If the bob is too subtle or too strong, adjust the knee values (`58`/`42`) — keep all four equal and
+within ~±12 of `50`. Only added to `InstinctBittleESP_arm.h` (the `ROBOT_ARM` build); a non-arm build
+would also need it in `InstinctBittleESP.h`.

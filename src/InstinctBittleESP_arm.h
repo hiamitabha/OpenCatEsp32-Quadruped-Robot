@@ -1,5 +1,5 @@
 #define BITTLE
-//number of skills: 85
+//number of skills: 86
 
 const int8_t bdF[] PROGMEM = { 
 37, 0, 0, 1,
@@ -2393,16 +2393,26 @@ const int8_t wh[] PROGMEM = {
    26,   0,   0,   0,  -5,  -5,  20,  20,  45,  45, 105, 105,  45,  45, -45, -45,	16, 0, 0, 0,
     0,   0,   0,   0,   0,   0,   0,   0,  30,  30,  30,  30,  30,  30,  30,  30,	 8, 0, 0, 0,
 };
-const int8_t zz[] PROGMEM = { 
+const int8_t grv[] PROGMEM = {
+-6, 0, 0, 1,
+ 1, 4, 4,
+    0,   0,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  50,  50,  50,  50,	 8, 2, 0, 0,
+   25,  15,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  58,  58,  58,  58,	 6, 0, 0, 0,
+  -25,   0,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  42,  42,  42,  42,	 6, 0, 0, 0,
+   25,  15,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  58,  58,  58,  58,	 6, 0, 0, 0,
+  -25,   0,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  42,  42,  42,  42,	 6, 0, 0, 0,
+    0,   0,   0,   0,   0,   0,   0,   0,  25,  25,  20,  20,  50,  50,  50,  50,	 8, 2, 0, 0,
+};
+const int8_t zz[] PROGMEM = {
 -1, 0, 0, 1,
  0, 0, 0, 
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,	 4, 0, 0, 0,
 };
-  const char* skillNameWithType[]={"bdFI","bkI","bkArmFI","bkArmLI","bkFI","bkLI","carpetFI","carpetLI","crArmFI","crArmLI","crFI","crLI","gpFI","gpLI","hlwI","jpFI","lftFI","lftLI","phFI","phLI","trArmFI","trArmLI","trFI","trLI","vtArmFI","vtFI","vtLI","wkArmFI","wkArmLI","wkFI","wkLI","balanceI","buttUpI","calibI","droppedI","liftedI","lndI","restI","sitI","strI","upI","zeroN","angI","bxI","chrI","ckI","clapI","cmhI","dgI","dropRecI","fivI","gdbI","hdsI","hgI","hiI","hskI","huI","huntI","jmpI","kcI","launchI","lpovI","mwI","ndI","pdI","peeI","pickI","pickDI","pickFI","puI","pu1I","putI","putDI","putFI","rcI","scrhI","showOffI","snfI","tblI","tossI","tossDI","tossFI","tsI","whI","zzI",};
+  const char* skillNameWithType[]={"bdFI","bkI","bkArmFI","bkArmLI","bkFI","bkLI","carpetFI","carpetLI","crArmFI","crArmLI","crFI","crLI","gpFI","gpLI","hlwI","jpFI","lftFI","lftLI","phFI","phLI","trArmFI","trArmLI","trFI","trLI","vtArmFI","vtFI","vtLI","wkArmFI","wkArmLI","wkFI","wkLI","balanceI","buttUpI","calibI","droppedI","liftedI","lndI","restI","sitI","strI","upI","zeroN","angI","bxI","chrI","ckI","clapI","cmhI","dgI","dropRecI","fivI","gdbI","hdsI","hgI","hiI","hskI","huI","huntI","jmpI","kcI","launchI","lpovI","mwI","ndI","pdI","peeI","pickI","pickDI","pickFI","puI","pu1I","putI","putDI","putFI","rcI","scrhI","showOffI","snfI","tblI","tossI","tossDI","tossFI","tsI","whI","zzI","grvI",};
 #if !defined(MAIN_SKETCH) || !defined(I2C_EEPROM)
 		//if it's not the main sketch to save data or there's no external EEPROM, 
 		//the list should always contain all information.
-  const int8_t* progmemPointer[] = {bdF, bk, bkArmF, bkArmL, bkF, bkL, carpetF, carpetL, crArmF, crArmL, crF, crL, gpF, gpL, hlw, jpF, lftF, lftL, phF, phL, trArmF, trArmL, trF, trL, vtArmF, vtF, vtL, wkArmF, wkArmL, wkF, wkL, balance, buttUp, calib, dropped, lifted, lnd, rest, sit, str, up, zero, ang, bx, chr, ck, clap, cmh, dg, dropRec, fiv, gdb, hds, hg, hi, hsk, hu, hunt, jmp, kc, launch, lpov, mw, nd, pd, pee, pick, pickD, pickF, pu, pu1, put, putD, putF, rc, scrh, showOff, snf, tbl, toss, tossD, tossF, ts, wh, zz, };
+  const int8_t* progmemPointer[] = {bdF, bk, bkArmF, bkArmL, bkF, bkL, carpetF, carpetL, crArmF, crArmL, crF, crL, gpF, gpL, hlw, jpF, lftF, lftL, phF, phL, trArmF, trArmL, trF, trL, vtArmF, vtF, vtL, wkArmF, wkArmL, wkF, wkL, balance, buttUp, calib, dropped, lifted, lnd, rest, sit, str, up, zero, ang, bx, chr, ck, clap, cmh, dg, dropRec, fiv, gdb, hds, hg, hi, hsk, hu, hunt, jmp, kc, launch, lpov, mw, nd, pd, pee, pick, pickD, pickF, pu, pu1, put, putD, putF, rc, scrh, showOff, snf, tbl, toss, tossD, tossF, ts, wh, zz, grv, };
 #else	//only need to know the pointers to newbilities, because the intuitions have been saved onto external EEPROM,
 	//while the newbilities on progmem are assigned to new addresses
   const int8_t* progmemPointer[] = {zero, };
